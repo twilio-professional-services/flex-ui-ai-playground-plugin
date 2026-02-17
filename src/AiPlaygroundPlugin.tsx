@@ -1,0 +1,58 @@
+import React from 'react';
+import * as Flex from '@twilio/flex-ui';
+import { FlexPlugin } from '@twilio/flex-plugin';
+import { combineReducers } from 'redux';
+import { TaskHelper } from '@twilio/flex-ui';
+import SyncToReduxService from './utils/sync-to-redux/SyncToReduxService';
+import { reducerHook } from './utils/sync-to-redux/state/syncToReduxSlice';
+import { initPaste } from './initPaste';
+import { initCallSyncTracking } from './initCallSyncTracking';
+import RealTimeTranscriptionTab from './components/RealTimeTranscription';
+
+const PLUGIN_NAME = 'AiPlaygroundPlugin';
+
+export default class AiPlaygroundPlugin extends FlexPlugin {
+  constructor() {
+    super(PLUGIN_NAME);
+  }
+
+  async init(flex: typeof Flex, manager: Flex.Manager): Promise<void> {
+    initPaste(flex);
+
+    // Register Redux reducer
+    const reduxNamespace = 'ai-playground';
+    const reducers = reducerHook();
+
+    if (manager.store && manager.store.addReducer) {
+      manager.store.addReducer(reduxNamespace, combineReducers(reducers));
+    } else {
+      console.error('[AiPlaygroundPlugin] Unable to register Redux reducer');
+    }
+
+    // Initialize SyncToRedux service
+    try {
+      await SyncToReduxService.initialize(reduxNamespace);
+      console.log('[AiPlaygroundPlugin] SyncToRedux service initialized successfully');
+    } catch (error) {
+      console.error('[AiPlaygroundPlugin] Failed to initialize SyncToRedux service:', error);
+    }
+
+    initCallSyncTracking(flex, manager);
+
+    // Register transcription tab for voice calls
+    flex.TaskCanvasTabs.Content.add(
+      <Flex.Tab
+        key="realtime-transcription"
+        uniqueName="realtime-transcription"
+        label="RealTime Transcription"
+      >
+        <RealTimeTranscriptionTab />
+      </Flex.Tab>,
+      {
+        sortOrder: 10,
+        if: ({ task }: { task: Flex.ITask }) =>
+          TaskHelper.isCallTask(task) && !!task.attributes?.call_sid,
+      }
+    );
+  }
+}
