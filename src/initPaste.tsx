@@ -9,7 +9,19 @@ export function initPaste(flex: typeof Flex): void {
         baseTheme: props.theme?.isLight ? 'default' : 'dark',
         theme: props.theme?.tokens,
         style: { minWidth: '100%', height: '100%' },
-        elements: {},
+        elements: {
+          OPERATOR_TAB_LIST: {
+            overflowX: 'auto',
+            padding: 'space10',
+          },
+          OPERATOR_TAB_LIST_CHILD: {
+            flexWrap: 'nowrap',
+          },
+          OPERATOR_TAB: {
+            whiteSpace: 'nowrap',
+            flexShrink: 0,
+          },
+        },
       };
       return (
         <CustomizationProvider {...pasteProviderProps}>

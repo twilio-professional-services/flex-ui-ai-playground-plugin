@@ -8,6 +8,7 @@ import { reducerHook } from './utils/sync-to-redux/state/syncToReduxSlice';
 import { initPaste } from './initPaste';
 import { initCallSyncTracking } from './initCallSyncTracking';
 import RealTimeTranscriptionTab from './components/RealTimeTranscription';
+import { AiPlaygroundPanel } from './components/AiPlayground';
 
 const PLUGIN_NAME = 'AiPlaygroundPlugin';
 
@@ -52,6 +53,19 @@ export default class AiPlaygroundPlugin extends FlexPlugin {
         sortOrder: 10,
         if: ({ task }: { task: Flex.ITask }) =>
           TaskHelper.isCallTask(task) && !!task.attributes?.call_sid,
+      }
+    );
+
+    // Register Panel 2 for AI Playground
+    flex.AgentDesktopView.Panel2.Content.add(
+      <AiPlaygroundPanel key="ai-playground-panel" />,
+      {
+        sortOrder: -1,
+        if: ({ tasks, selectedTaskSid }: { tasks: Map<string, Flex.ITask>; selectedTaskSid: string }) => {
+          if (!selectedTaskSid) return false;
+          const task = tasks.get(selectedTaskSid);
+          return !!task && TaskHelper.isCallTask(task) && !!task.attributes?.call_sid;
+        },
       }
     );
   }
