@@ -23,6 +23,11 @@ class SyncToReduxService {
   private initialized = false;
   private reduxNamespace: string = 'flex-sync'; // Default namespace
 
+  // Internal index-keyed storage for list items, enabling incremental
+  // updates from Sync events without re-fetching the entire list.
+  // Key: "mapName::objectKey", Value: Map<listIndex, itemData>
+  private listIndexMaps: Map<string, Map<number, any>> = new Map();
+
   /**
    * Initialize the SyncToRedux service
    * @param reduxNamespace - The Redux namespace where syncToRedux state is registered (default: 'flex-sync')
@@ -126,18 +131,21 @@ class SyncToReduxService {
 
       this.trackedMaps.set(mapName, trackedMap);
 
+      // Add map event listeners BEFORE processing existing items to avoid
+      // a race condition where items added during setup would be missed.
+      // The dedup guard in openSyncObject prevents double-processing if an
+      // item appears in both the initial read and a concurrent event.
+      if (trackingMode === 'metadata') {
+        this.addMetadataModeListeners(mapName, syncMap);
+      } else {
+        this.addDirectModeListeners(mapName, syncMap);
+      }
+
       // Process items based on mode
       if (trackingMode === 'metadata') {
         await this.setupMetadataMode(mapName, trackedMap, items);
       } else {
         await this.setupDirectMode(mapName, trackedMap, items);
-      }
-
-      // Add map event listeners based on mode
-      if (trackingMode === 'metadata') {
-        this.addMetadataModeListeners(mapName, syncMap);
-      } else {
-        this.addDirectModeListeners(mapName, syncMap);
       }
 
       console.log(`[SyncToRedux] Successfully tracking map: ${mapName} (mode: ${trackingMode})`);
@@ -191,7 +199,6 @@ class SyncToReduxService {
     syncMap
       .on('itemAdded', async (event: any) => {
         if (!event.isLocal) {
-          console.log(`[SyncToRedux] Item added to metadata map "${mapName}":`, event.item.key);
           const metadata = event.item.data as SyncObjectMetadata;
 
           const tracked = this.trackedMaps.get(mapName);
@@ -203,9 +210,8 @@ class SyncToReduxService {
           await this.openSyncObject(mapName, event.item.key, metadata);
         }
       })
-      .on('itemUpdated', (event: any) => {
+      .on('itemUpdated', async (event: any) => {
         if (!event.isLocal) {
-          console.log(`[SyncToRedux] Item updated in metadata map "${mapName}":`, event.item.key);
           const metadata = event.item.data as SyncObjectMetadata;
 
           const tracked = this.trackedMaps.get(mapName);
@@ -214,31 +220,34 @@ class SyncToReduxService {
           }
 
           this.dispatch(updateMapData({ mapName, key: event.item.key, value: metadata }));
+
+          // Open sync object if not already tracked (handles case where
+          // itemAdded was missed but a subsequent update catches it)
+          if (tracked && !tracked.syncObjects[event.item.key]) {
+            await this.openSyncObject(mapName, event.item.key, metadata);
+          }
         }
       })
       .on('itemRemoved', async (event: any) => {
-        console.log(`[SyncToRedux] Item removed from metadata map "${mapName}":`, event.key);
-
         // Close and cleanup the referenced sync object
         const tracked = this.trackedMaps.get(mapName);
         if (tracked && tracked.syncObjects[event.key]) {
-            const syncObj = tracked.syncObjects[event.key];
-            syncObj.syncObject.removeAllListeners();
-            await syncObj.syncObject.close();
-            delete tracked.syncObjects[event.key];
-            delete tracked.mapData[event.key];
-          }
+          const syncObj = tracked.syncObjects[event.key];
+          syncObj.syncObject.removeAllListeners();
+          await syncObj.syncObject.close();
+          this.listIndexMaps.delete(`${mapName}::${event.key}`);
+          delete tracked.syncObjects[event.key];
+          delete tracked.mapData[event.key];
+        }
 
-          this.dispatch(removeMapItem({ mapName, key: event.key }));
-        });
+        this.dispatch(removeMapItem({ mapName, key: event.key }));
+      });
   }
 
   private addDirectModeListeners(mapName: string, syncMap: SyncMap): void {
     syncMap
       .on('itemAdded', (event: any) => {
         if (!event.isLocal) {
-          console.log(`[SyncToRedux] Item added to direct map "${mapName}":`, event.item.key);
-
           const tracked = this.trackedMaps.get(mapName);
           if (tracked) {
             tracked.mapItems[event.item.key] = event.item.data;
@@ -249,8 +258,6 @@ class SyncToReduxService {
       })
       .on('itemUpdated', (event: any) => {
         if (!event.isLocal) {
-          console.log(`[SyncToRedux] Item updated in direct map "${mapName}":`, event.item.key);
-
           const tracked = this.trackedMaps.get(mapName);
           if (tracked) {
             tracked.mapItems[event.item.key] = event.item.data;
@@ -260,8 +267,6 @@ class SyncToReduxService {
         }
       })
       .on('itemRemoved', (event: any) => {
-        console.log(`[SyncToRedux] Item removed from direct map "${mapName}":`, event.key);
-
         const tracked = this.trackedMaps.get(mapName);
         if (tracked) {
           delete tracked.mapItems[event.key];
@@ -269,6 +274,17 @@ class SyncToReduxService {
 
         this.dispatch(removeMapItem({ mapName, key: event.key }));
       });
+  }
+
+  // Derive a sorted data array from the index map for Redux dispatch
+  private sortedListItems(indexMap: Map<number, any>): any[] {
+    return Array.from(indexMap.entries())
+      .sort(([a], [b]) => a - b)
+      .map(([, data]) => data);
+  }
+
+  private listKey(mapName: string, key: string): string {
+    return `${mapName}::${key}`;
   }
 
   private async openSyncObject(mapName: string, key: string, metadata: SyncObjectMetadata): Promise<void> {
@@ -279,6 +295,11 @@ class SyncToReduxService {
     const tracked = this.trackedMaps.get(mapName);
     if (!tracked) {
       console.warn(`[SyncToRedux] Map "${mapName}" not found when opening sync object`);
+      return;
+    }
+
+    // Skip if this sync object is already tracked (prevents double-opens from race conditions)
+    if (tracked.syncObjects[key]) {
       return;
     }
 
@@ -298,11 +319,9 @@ class SyncToReduxService {
         // Dispatch initial data to Redux
         this.dispatch(updateSyncDocument({ mapName, key, data: doc.data }));
 
-        // Add document event listeners
+        // Document updated events carry the full new data — no read needed
         doc.on('updated', (event: any) => {
           if (!event.isLocal) {
-            console.log(`[SyncToRedux] Document updated: ${metadata.syncObjectName}`);
-
             const tracked = this.trackedMaps.get(mapName);
             if (tracked && tracked.syncObjects[key]) {
               tracked.syncObjects[key].data = event.data;
@@ -315,8 +334,21 @@ class SyncToReduxService {
       } else if (metadata.syncObjectType === 'list') {
         const list = await this.syncClient.list({ id: metadata.syncObjectName, mode: 'open_or_create' });
 
-        // Get all list items
-        const items = await this.getAllListItems(list);
+        // Load all existing items and build the index map for incremental updates
+        const indexMap = new Map<number, any>();
+        let page = await list.getItems({ pageSize: 100 });
+        for (const item of page.items as any[]) {
+          indexMap.set(item.index, item.data);
+        }
+        while (page.hasNextPage) {
+          page = await page.nextPage();
+          for (const item of page.items as any[]) {
+            indexMap.set(item.index, item.data);
+          }
+        }
+        this.listIndexMaps.set(this.listKey(mapName, key), indexMap);
+
+        const items = this.sortedListItems(indexMap);
 
         // Store the tracked object
         tracked.syncObjects[key] = {
@@ -328,21 +360,56 @@ class SyncToReduxService {
         // Dispatch initial data to Redux
         this.dispatch(updateSyncList({ mapName, key, items }));
 
-        // Add list event listeners
+        // List events carry the item data — update the index map incrementally, no read needed
+        const lk = this.listKey(mapName, key);
+
         list
-          .on('itemAdded', () => this.refreshListData(mapName, key, list))
-          .on('itemUpdated', () => this.refreshListData(mapName, key, list))
-          .on('itemRemoved', () => this.refreshListData(mapName, key, list));
+          .on('itemAdded', (event: any) => {
+            const idxMap = this.listIndexMaps.get(lk);
+            if (!idxMap) return;
+            idxMap.set(event.item.index, event.item.data);
+            const updatedItems = this.sortedListItems(idxMap);
+
+            const t = this.trackedMaps.get(mapName);
+            if (t?.syncObjects[key]) {
+              t.syncObjects[key].items = updatedItems;
+            }
+            this.dispatch(updateSyncList({ mapName, key, items: updatedItems }));
+          })
+          .on('itemUpdated', (event: any) => {
+            const idxMap = this.listIndexMaps.get(lk);
+            if (!idxMap) return;
+            idxMap.set(event.item.index, event.item.data);
+            const updatedItems = this.sortedListItems(idxMap);
+
+            const t = this.trackedMaps.get(mapName);
+            if (t?.syncObjects[key]) {
+              t.syncObjects[key].items = updatedItems;
+            }
+            this.dispatch(updateSyncList({ mapName, key, items: updatedItems }));
+          })
+          .on('itemRemoved', (event: any) => {
+            const idxMap = this.listIndexMaps.get(lk);
+            if (!idxMap) return;
+            idxMap.delete(event.index);
+            const updatedItems = this.sortedListItems(idxMap);
+
+            const t = this.trackedMaps.get(mapName);
+            if (t?.syncObjects[key]) {
+              t.syncObjects[key].items = updatedItems;
+            }
+            this.dispatch(updateSyncList({ mapName, key, items: updatedItems }));
+          });
 
       } else if (metadata.syncObjectType === 'map') {
         // Maps referenced from metadata mode are always tracked in direct mode
         // (no nested metadata - keep it simple)
         const map = await this.syncClient.map({ id: metadata.syncObjectName, mode: 'open_or_create' });
 
-        // Get all map items - treat as direct data
-        const items = await this.getAllMapItems(map);
+        // Get all map items for initial load
+        const rawItems = await this.getAllMapItems(map);
         const mapItems: Record<string, any> = {};
-        items.forEach(item => {
+        rawItems.forEach(item => {
           mapItems[item.key] = item.data;
         });
 
@@ -356,52 +423,40 @@ class SyncToReduxService {
         // Dispatch initial data to Redux
         this.dispatch(updateSyncMap({ mapName, key, mapItems }));
 
-        // Add map event listeners for direct mode updates
+        // Map events carry item data — update mapItems directly, no re-read needed
         map
-          .on('itemAdded', () => this.refreshMapData(mapName, key, map))
-          .on('itemUpdated', () => this.refreshMapData(mapName, key, map))
-          .on('itemRemoved', () => this.refreshMapData(mapName, key, map));
+          .on('itemAdded', (event: any) => {
+            const t = this.trackedMaps.get(mapName);
+            if (t?.syncObjects[key]) {
+              const mi = t.syncObjects[key].mapItems || {};
+              mi[event.item.key] = event.item.data;
+              t.syncObjects[key].mapItems = mi;
+              this.dispatch(updateSyncMap({ mapName, key, mapItems: { ...mi } }));
+            }
+          })
+          .on('itemUpdated', (event: any) => {
+            const t = this.trackedMaps.get(mapName);
+            if (t?.syncObjects[key]) {
+              const mi = t.syncObjects[key].mapItems || {};
+              mi[event.item.key] = event.item.data;
+              t.syncObjects[key].mapItems = mi;
+              this.dispatch(updateSyncMap({ mapName, key, mapItems: { ...mi } }));
+            }
+          })
+          .on('itemRemoved', (event: any) => {
+            const t = this.trackedMaps.get(mapName);
+            if (t?.syncObjects[key]) {
+              const mi = t.syncObjects[key].mapItems || {};
+              delete mi[event.key];
+              t.syncObjects[key].mapItems = mi;
+              this.dispatch(updateSyncMap({ mapName, key, mapItems: { ...mi } }));
+            }
+          });
       }
 
     } catch (error) {
       console.error(`[SyncToRedux] Failed to open sync object "${metadata.syncObjectName}":`, error);
       this.dispatch(setError(error instanceof Error ? error.message : 'Failed to open sync object'));
-    }
-  }
-
-  private async refreshListData(mapName: string, key: string, list: SyncList): Promise<void> {
-    try {
-      console.log(`[SyncToRedux] Refreshing list data for "${key}" in map "${mapName}"`);
-      const items = await this.getAllListItems(list);
-
-      const tracked = this.trackedMaps.get(mapName);
-      if (tracked && tracked.syncObjects[key]) {
-        tracked.syncObjects[key].items = items;
-      }
-
-      this.dispatch(updateSyncList({ mapName, key, items }));
-    } catch (error) {
-      console.error(`[SyncToRedux] Failed to refresh list data:`, error);
-    }
-  }
-
-  private async refreshMapData(mapName: string, key: string, map: SyncMap): Promise<void> {
-    try {
-      console.log(`[SyncToRedux] Refreshing map data for "${key}" in map "${mapName}"`);
-      const items = await this.getAllMapItems(map);
-      const mapItems: Record<string, any> = {};
-      items.forEach(item => {
-        mapItems[item.key] = item.data;
-      });
-
-      const tracked = this.trackedMaps.get(mapName);
-      if (tracked && tracked.syncObjects[key]) {
-        tracked.syncObjects[key].mapItems = mapItems;
-      }
-
-      this.dispatch(updateSyncMap({ mapName, key, mapItems }));
-    } catch (error) {
-      console.error(`[SyncToRedux] Failed to refresh map data:`, error);
     }
   }
 
@@ -413,19 +468,6 @@ class SyncToReduxService {
     while (page.hasNextPage) {
       page = await page.nextPage();
       result.push(...page.items);
-    }
-
-    return result;
-  }
-
-  private async getAllListItems(list: SyncList): Promise<any[]> {
-    const result: any[] = [];
-    let page = await list.getItems({ pageSize: 100 });
-    result.push(...page.items.map((item: any) => item.data));
-
-    while (page.hasNextPage) {
-      page = await page.nextPage();
-      result.push(...page.items.map((item: any) => item.data));
     }
 
     return result;
@@ -443,9 +485,9 @@ class SyncToReduxService {
 
       // Remove all sync object listeners and close them
       for (const [key, syncObj] of Object.entries(tracked.syncObjects)) {
-        console.log(`[SyncToRedux] Closing sync object: ${key}`);
         syncObj.syncObject.removeAllListeners();
         await syncObj.syncObject.close();
+        this.listIndexMaps.delete(this.listKey(mapName, key));
       }
 
       // Remove map listeners and close it

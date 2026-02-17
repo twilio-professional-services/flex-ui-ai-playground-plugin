@@ -2,10 +2,13 @@
 
 The `syncHelper.private.js` module provides reusable, low-level CRUD operations for Twilio Sync resources. It can be imported by any Twilio Serverless function that needs to interact with Sync.
 
+All functions accept a Twilio client and Sync service SID instead of a pre-configured syncService object, keeping all REST API operations internal to the helper.
+
 ## Import
 
 ```javascript
-const syncHelperPath = Runtime.getFunctions()['/syncHelper'].path;
+// Import at global level for efficiency (module is cached across invocations)
+const syncHelperPath = Runtime.getFunctions()['syncHelper'].path;
 const {
   ensureMap,
   ensureDocument,
@@ -17,23 +20,27 @@ const {
 } = require(syncHelperPath);
 ```
 
-**Note:** The key is `'/syncHelper'` with a leading slash.
+**Note:** The key is `'syncHelper'` with NO leading slash (unlike Assets which require a leading slash).
+
+**Best Practice:** Import at the global level (outside your handler function) for better performance. The module is loaded once at cold start and reused across warm invocations.
 
 ## API Reference
 
-### ensureMap(syncService, mapName)
+### ensureMap(client, syncServiceSid, mapName)
 
 Ensures a Sync Map exists. Creates it if not found. Handles concurrent creation attempts.
 
 **Parameters:**
-- `syncService` (Object) - Twilio Sync service instance
+- `client` (Object) - Twilio client instance (from `context.getTwilioClient()`)
+- `syncServiceSid` (string) - Sync service SID or unique name (e.g., `'ISxxxx'` or `'default'`)
 - `mapName` (string) - Unique name for the map
 
 **Returns:** `Promise<Object>` - The map instance
 
 **Example:**
 ```javascript
-const map = await ensureMap(syncService, 'ai-playground-CA1234');
+const client = context.getTwilioClient();
+const map = await ensureMap(client, 'default', 'ai-playground-CA1234');
 ```
 
 **Error Handling:**
@@ -42,12 +49,13 @@ const map = await ensureMap(syncService, 'ai-playground-CA1234');
 
 ---
 
-### ensureDocument(syncService, docName, initialData)
+### ensureDocument(client, syncServiceSid, docName, initialData)
 
 Ensures a Sync Document exists. Creates it if not found. Returns creation status.
 
 **Parameters:**
-- `syncService` (Object) - Twilio Sync service instance
+- `client` (Object) - Twilio client instance
+- `syncServiceSid` (string) - Sync service SID or unique name
 - `docName` (string) - Unique name for the document
 - `initialData` (Object) - Initial data if creating (default: `{}`)
 
@@ -57,8 +65,10 @@ Ensures a Sync Document exists. Creates it if not found. Returns creation status
 
 **Example:**
 ```javascript
+const client = context.getTwilioClient();
 const { resource: doc, created } = await ensureDocument(
-  syncService,
+  client,
+  'default',
   'partialTranscript-CA1234',
   { inbound_track: {} }
 );
@@ -75,8 +85,8 @@ if (created) {
 **Use Case:**
 The `created` flag allows callers to perform one-time initialization without extra API calls:
 ```javascript
-const { created: docCreated } = await ensureDocument(syncService, docName, {});
-const { created: listCreated } = await ensureList(syncService, listName);
+const { created: docCreated } = await ensureDocument(client, syncServiceSid, docName, {});
+const { created: listCreated } = await ensureList(client, syncServiceSid, listName);
 
 if (docCreated || listCreated) {
   // Only create map metadata on first initialization
@@ -86,12 +96,13 @@ if (docCreated || listCreated) {
 
 ---
 
-### ensureList(syncService, listName)
+### ensureList(client, syncServiceSid, listName)
 
 Ensures a Sync List exists. Creates it if not found. Returns creation status.
 
 **Parameters:**
-- `syncService` (Object) - Twilio Sync service instance
+- `client` (Object) - Twilio client instance
+- `syncServiceSid` (string) - Sync service SID or unique name
 - `listName` (string) - Unique name for the list
 
 **Returns:** `Promise<Object>` - `{ resource, created: boolean }`
@@ -100,8 +111,10 @@ Ensures a Sync List exists. Creates it if not found. Returns creation status.
 
 **Example:**
 ```javascript
+const client = context.getTwilioClient();
 const { resource: list, created } = await ensureList(
-  syncService,
+  client,
+  'default',
   'transcriptions-CA1234'
 );
 ```
@@ -112,12 +125,13 @@ const { resource: list, created } = await ensureList(
 
 ---
 
-### upsertMapItem(syncService, mapName, key, data)
+### upsertMapItem(client, syncServiceSid, mapName, key, data)
 
 Creates or updates a Sync Map item.
 
 **Parameters:**
-- `syncService` (Object) - Twilio Sync service instance
+- `client` (Object) - Twilio client instance
+- `syncServiceSid` (string) - Sync service SID or unique name
 - `mapName` (string) - Map unique name
 - `key` (string) - Item key
 - `data` (Object) - Item data (JSON)
@@ -126,8 +140,10 @@ Creates or updates a Sync Map item.
 
 **Example:**
 ```javascript
+const client = context.getTwilioClient();
 await upsertMapItem(
-  syncService,
+  client,
+  'default',
   'ai-playground-CA1234',
   'callStatus',
   { status: 'in-progress', startTime: new Date().toISOString() }
@@ -140,12 +156,13 @@ await upsertMapItem(
 
 ---
 
-### updateDocumentWithSequence(syncService, docName, attributeName, sequenceId, data)
+### updateDocumentWithSequence(client, syncServiceSid, docName, attributeName, sequenceId, data)
 
 Updates a Sync Document with optimistic concurrency control using etag (revision) and SequenceId to prevent race conditions.
 
 **Parameters:**
-- `syncService` (Object) - Twilio Sync service instance
+- `client` (Object) - Twilio client instance
+- `syncServiceSid` (string) - Sync service SID or unique name
 - `docName` (string) - Document unique name
 - `attributeName` (string) - Key within document to update (e.g., `'inbound_track'`)
 - `sequenceId` (number) - Sequence ID from transcription event (for ordering)
@@ -155,8 +172,10 @@ Updates a Sync Document with optimistic concurrency control using etag (revision
 
 **Example:**
 ```javascript
+const client = context.getTwilioClient();
 await updateDocumentWithSequence(
-  syncService,
+  client,
+  'default',
   'partialTranscript-CA1234',
   'inbound_track',
   42,
@@ -207,12 +226,13 @@ Perfect for high-frequency updates where order matters (transcription events, se
 
 ---
 
-### appendToList(syncService, listName, data)
+### appendToList(client, syncServiceSid, listName, data)
 
 Appends an item to a Sync List.
 
 **Parameters:**
-- `syncService` (Object) - Twilio Sync service instance
+- `client` (Object) - Twilio client instance
+- `syncServiceSid` (string) - Sync service SID or unique name
 - `listName` (string) - List unique name
 - `data` (Object) - Item data (JSON)
 
@@ -220,28 +240,30 @@ Appends an item to a Sync List.
 
 **Example:**
 ```javascript
+const client = context.getTwilioClient();
 await appendToList(
-  syncService,
+  client,
+  'default',
   'transcriptions-CA1234',
   {
     text: 'Final transcript text',
     track: 'inbound_track',
-    sequenceId: 42,
     timestamp: '2026-02-17T02:29:39Z'
   }
 );
 ```
 
-**Note:** List items are ordered by insertion time. No deduplication is performed.
+**Note:** List items are ordered by insertion time. No deduplication is performed. Lists are append-only and don't need sequence ID ordering.
 
 ---
 
-### addMetadataPointer(syncService, mapName, key, syncObjectType, syncObjectName)
+### addMetadataPointer(client, syncServiceSid, mapName, key, syncObjectType, syncObjectName)
 
 Adds a metadata map item that points to another Sync object. Used for the SyncToRedux pattern.
 
 **Parameters:**
-- `syncService` (Object) - Twilio Sync service instance
+- `client` (Object) - Twilio client instance
+- `syncServiceSid` (string) - Sync service SID or unique name
 - `mapName` (string) - Map unique name
 - `key` (string) - Item key (e.g., `'partialTranscript'`)
 - `syncObjectType` (string) - `'doc'`, `'list'`, or `'map'`
@@ -251,8 +273,11 @@ Adds a metadata map item that points to another Sync object. Used for the SyncTo
 
 **Example:**
 ```javascript
+const client = context.getTwilioClient();
+
 await addMetadataPointer(
-  syncService,
+  client,
+  'default',
   'ai-playground-CA1234',
   'partialTranscript',
   'doc',
@@ -260,7 +285,8 @@ await addMetadataPointer(
 );
 
 await addMetadataPointer(
-  syncService,
+  client,
+  'default',
   'ai-playground-CA1234',
   'transcriptions',
   'list',
@@ -338,28 +364,51 @@ try {
 
 ## Common Usage Patterns
 
-### Pattern 1: One-Time Initialization
+### Pattern 1: Global Import for Performance
+
+```javascript
+// At top of file (outside handler function)
+const syncHelperPath = Runtime.getFunctions()['syncHelper'].path;
+const { ensureDocument, appendToList } = require(syncHelperPath);
+
+exports.handler = async (context, event, callback) => {
+  const client = context.getTwilioClient();
+  const syncServiceSid = context.SYNC_SERVICE_SID || 'default';
+
+  // Use the imported functions
+  await ensureDocument(client, syncServiceSid, 'myDoc', {});
+
+  return callback(null, 'Success');
+};
+```
+
+**Benefit:** Module is loaded once at cold start, not on every invocation.
+
+### Pattern 2: One-Time Initialization
 
 ```javascript
 // Initialize Sync resources only once per call
-const { created: docCreated } = await ensureDocument(syncService, docName, {});
-const { created: listCreated } = await ensureList(syncService, listName);
+const client = context.getTwilioClient();
+const { created: docCreated } = await ensureDocument(client, syncServiceSid, docName, {});
+const { created: listCreated } = await ensureList(client, syncServiceSid, listName);
 
 if (docCreated || listCreated) {
   // One-time setup (map metadata, initial state, etc.)
-  await ensureMap(syncService, mapName);
-  await addMetadataPointer(syncService, mapName, 'data', 'doc', docName);
+  await ensureMap(client, syncServiceSid, mapName);
+  await addMetadataPointer(client, syncServiceSid, mapName, 'data', 'doc', docName);
 }
 ```
 
 **Benefit:** Avoids checking map metadata on every event (reduces API calls by ~50%).
 
-### Pattern 2: High-Frequency Updates
+### Pattern 3: High-Frequency Updates
 
 ```javascript
 // Update document with race condition protection
+const client = context.getTwilioClient();
 await updateDocumentWithSequence(
-  syncService,
+  client,
+  'default',
   'realtime-data-CA1234',
   'sensor1',
   event.sequenceId,
@@ -369,18 +418,20 @@ await updateDocumentWithSequence(
 
 **Benefit:** Handles concurrent updates and out-of-order events automatically.
 
-### Pattern 3: Append-Only Log
+### Pattern 4: Append-Only Log
 
 ```javascript
 // Append events to list (chronological order)
+const client = context.getTwilioClient();
 await appendToList(
-  syncService,
+  client,
+  'default',
   'call-events-CA1234',
   { event: 'hold', timestamp: new Date().toISOString() }
 );
 ```
 
-**Benefit:** Simple, no conflicts, preserves chronological order.
+**Benefit:** Simple, no conflicts, preserves chronological order. No sequence ID needed.
 
 ---
 
@@ -393,8 +444,8 @@ Don't create Sync resources preemptively. Use `ensureDocument`/`ensureList` to c
 ❌ **Bad:**
 ```javascript
 // Create resources before any event arrives
-await ensureDocument(syncService, docName, {});
-await ensureList(syncService, listName);
+await ensureDocument(client, syncServiceSid, docName, {});
+await ensureList(client, syncServiceSid, listName);
 // What if no events ever arrive?
 ```
 
@@ -402,7 +453,7 @@ await ensureList(syncService, listName);
 ```javascript
 // Create resources when first event arrives
 if (event.type === 'transcription-content') {
-  const { created } = await ensureDocument(syncService, docName, {});
+  const { created } = await ensureDocument(client, syncServiceSid, docName, {});
   // Resources created only when needed
 }
 ```
@@ -414,7 +465,8 @@ Use the `created` flag to perform one-time setup:
 ❌ **Bad:**
 ```javascript
 // Check map item on every event
-await ensureDocument(syncService, docName, {});
+await ensureDocument(client, syncServiceSid, docName, {});
+const syncService = client.sync.v1.services(syncServiceSid);
 try {
   await syncService.syncMaps(mapName).syncMapItems('metadata').fetch();
 } catch (error) {
@@ -428,9 +480,9 @@ try {
 ✅ **Good:**
 ```javascript
 // Only add metadata when resources are created
-const { created } = await ensureDocument(syncService, docName, {});
+const { created } = await ensureDocument(client, syncServiceSid, docName, {});
 if (created) {
-  await addMetadataPointer(...);
+  await addMetadataPointer(client, syncServiceSid, ...);
 }
 // No extra fetches on subsequent events
 ```
@@ -442,6 +494,7 @@ When updates arrive rapidly and order matters:
 ❌ **Bad:**
 ```javascript
 // Direct update without ordering
+const syncService = client.sync.v1.services(syncServiceSid);
 await syncService.documents(docName).update({
   data: { value: event.value }
 });
@@ -452,7 +505,8 @@ await syncService.documents(docName).update({
 ```javascript
 // Update with SequenceId ordering
 await updateDocumentWithSequence(
-  syncService,
+  client,
+  syncServiceSid,
   docName,
   'channel1',
   event.sequenceId,
@@ -468,7 +522,7 @@ Separate data streams into different document attributes to avoid conflicts:
 ❌ **Bad:**
 ```javascript
 // Single document for all tracks - conflicts on every update
-await updateDocumentWithSequence(syncService, docName, 'data', seq, {
+await updateDocumentWithSequence(client, syncServiceSid, docName, 'data', seq, {
   inbound: inboundValue,
   outbound: outboundValue
 });
@@ -477,8 +531,34 @@ await updateDocumentWithSequence(syncService, docName, 'data', seq, {
 ✅ **Good:**
 ```javascript
 // Separate attributes per track - independent updates
-await updateDocumentWithSequence(syncService, docName, 'inbound_track', seq, inboundValue);
-await updateDocumentWithSequence(syncService, docName, 'outbound_track', seq, outboundValue);
+await updateDocumentWithSequence(client, syncServiceSid, docName, 'inbound_track', seq, inboundValue);
+await updateDocumentWithSequence(client, syncServiceSid, docName, 'outbound_track', seq, outboundValue);
+```
+
+### 5. Import at Global Level
+
+Import the syncHelper module at the global level for better performance:
+
+❌ **Bad:**
+```javascript
+exports.handler = async (context, event, callback) => {
+  // Imported on every invocation
+  const syncHelperPath = Runtime.getFunctions()['syncHelper'].path;
+  const { ensureDocument } = require(syncHelperPath);
+  // ...
+};
+```
+
+✅ **Good:**
+```javascript
+// Import once at cold start
+const syncHelperPath = Runtime.getFunctions()['syncHelper'].path;
+const { ensureDocument } = require(syncHelperPath);
+
+exports.handler = async (context, event, callback) => {
+  // Module already loaded
+  // ...
+};
 ```
 
 ---
@@ -502,9 +582,33 @@ await updateDocumentWithSequence(syncService, docName, 'outbound_track', seq, ou
 2. **Use `created` flag** - Avoid redundant checks on subsequent events
 3. **Skip unnecessary updates** - Don't update documents if data hasn't changed
 4. **Choose the right structure:**
-   - High-frequency updates → Document with `updateDocumentWithSequence`
-   - Append-only logs → List with `appendToList`
+   - High-frequency updates with ordering → Document with `updateDocumentWithSequence`
+   - Append-only logs → List with `appendToList` (no sequence ID needed)
    - Metadata/config → Map with `upsertMapItem`
+5. **Import at global level** - Load module once, not on every invocation
+
+---
+
+## API Design Notes
+
+### Why client + syncServiceSid instead of syncService?
+
+The helper accepts `client` and `syncServiceSid` parameters instead of a pre-configured `syncService` object:
+
+```javascript
+// OLD API (not used)
+const syncService = client.sync.v1.services(syncServiceSid);
+await ensureDocument(syncService, docName, {});
+
+// NEW API (current)
+await ensureDocument(client, syncServiceSid, docName, {});
+```
+
+**Benefits:**
+1. **Better Encapsulation:** All Sync REST API calls are internal to the helper
+2. **Cleaner Interfaces:** Functions accept simple, primitive parameters
+3. **More Flexible:** Easy to switch between Sync services by passing different SIDs
+4. **Service name support:** Can pass service unique name (e.g., `'default'`) or SID (e.g., `'ISxxxx'`)
 
 ---
 
@@ -512,11 +616,11 @@ await updateDocumentWithSequence(syncService, docName, 'outbound_track', seq, ou
 
 Potential additions to the helper:
 
-- **Batch operations:** `appendManyToList(syncService, listName, items[])`
-- **TTL management:** `setDocumentTTL(syncService, docName, ttlSeconds)`
-- **Cleanup:** `deleteDocument(syncService, docName)`, `deleteList(syncService, listName)`
-- **Pagination:** `readListItems(syncService, listName, { limit, pageToken })`
-- **Conditional updates:** `updateMapItemIf(syncService, mapName, key, predicate, data)`
+- **Batch operations:** `appendManyToList(client, syncServiceSid, listName, items[])`
+- **TTL management:** `setDocumentTTL(client, syncServiceSid, docName, ttlSeconds)`
+- **Cleanup:** `deleteDocument(client, syncServiceSid, docName)`, `deleteList(client, syncServiceSid, listName)`
+- **Pagination:** `readListItems(client, syncServiceSid, listName, { limit, pageToken })`
+- **Conditional updates:** `updateMapItemIf(client, syncServiceSid, mapName, key, predicate, data)`
 
 ---
 

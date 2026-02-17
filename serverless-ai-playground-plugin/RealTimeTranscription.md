@@ -51,11 +51,26 @@ Transcription Events
     v
 handleRealtimeTranscription.protected.js
     |
-    +---> Log all events
-          - transcription-started
-          - transcription-content
-          - transcription-stopped
-          - transcription-error
+    +---> Log all events (basic or detailed based on flag)
+    |     - transcription-started
+    |     - transcription-content
+    |     - transcription-stopped
+    |     - transcription-error
+    |
+    +---> Delegate to Sync helper (imported at global level)
+          |
+          v
+realtimeTranscriptionSyncHelper.private.js
+          |
+          +---> Manage Sync resource creation (conditional)
+          +---> Route events to appropriate handlers
+          +---> Use syncHelper utilities
+                |
+                v
+syncHelper.private.js
+                |
+                +---> Low-level Sync CRUD operations
+                +---> All REST API calls happen here
 ```
 
 ## Configuration Guide
@@ -76,6 +91,11 @@ WORKFLOW_SID=WWxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 TRANSCRIPTION_DOMAIN=your-service-name-1234.twil.io
 REALTIME_TRANSCRIPTION=true
 REALTIME_TRANSCRIPTION_PARTIAL_RESULTS=false
+DETAILED_TRANSCRIPTION_LOGGING=false
+
+# Sync Configuration
+SYNC_SERVICE_SID=default
+PARTIAL_STABLE_THRESHOLD=0.7
 ```
 
 #### Environment Variable Reference
@@ -87,7 +107,10 @@ REALTIME_TRANSCRIPTION_PARTIAL_RESULTS=false
 | `WORKFLOW_SID` | Yes | `WWxxxx...` | TaskRouter Workflow SID |
 | `TRANSCRIPTION_DOMAIN` | Yes | `service-1234.twil.io` | Serverless domain (no https://) |
 | `REALTIME_TRANSCRIPTION` | Yes | `true`/`false` | Enable transcription (case-insensitive) |
-| `REALTIME_TRANSCRIPTION_PARTIAL_RESULTS` | Yes | `true`/`false` | Enable partial results (case-insensitive) |
+| `REALTIME_TRANSCRIPTION_PARTIAL_RESULTS` | Yes | `true`/`false` | Enable partial results & Sync document (case-insensitive) |
+| `DETAILED_TRANSCRIPTION_LOGGING` | No | `true`/`false` | Enable detailed logging of all webhook events (default: `false`) |
+| `SYNC_SERVICE_SID` | No | `ISxxxx` or `default` | Sync service SID or name (default: `default`) |
+| `PARTIAL_STABLE_THRESHOLD` | No | `0.0` - `1.0` | Stability threshold for partial transcripts (default: `0.7`) |
 
 **Note:** Boolean flags are case-insensitive. All of these work: `true`, `True`, `TRUE`, `false`, `False`, `FALSE`
 
@@ -565,19 +588,39 @@ curl -X POST https://your-service-1234-dev.twil.io/handleIncomingCall \
 `functions/handleIncomingCall.protected.js` - Processes incoming calls, loads config, generates TwiML
 
 **Key Functions:**
-- `isEnabled(value)` - Case-insensitive boolean parser (handleIncomingCall.protected.js:17)
-- Configuration loading using `.open` property (handleIncomingCall.protected.js:22-30)
-- Phone number mapping based on To (dialed) number (handleIncomingCall.protected.js:42-45)
-- Conditional transcription (handleIncomingCall.protected.js:53-77)
-- Task attributes building (handleIncomingCall.protected.js:79-86)
-- TaskRouter enqueue (handleIncomingCall.protected.js:90-97)
+- `isEnabled(value)` - Case-insensitive boolean parser
+- Configuration loading using `.open` property
+- Phone number mapping based on To (dialed) number
+- Conditional transcription
+- Task attributes building
+- TaskRouter enqueue
 
 ### Webhook Handler
-`functions/handleRealtimeTranscription.protected.js` - Receives and logs transcription events
+`functions/handleRealtimeTranscription.protected.js` - Receives transcription events, handles logging, delegates to Sync helper
 
 **Key Features:**
-- Complete event logging (handleRealtimeTranscription.protected.js:19-49)
-- Error handling (handleRealtimeTranscription.protected.js:41-45)
+- Global-level import of syncHelper (imported once at cold start for efficiency)
+- Basic or detailed logging based on `DETAILED_TRANSCRIPTION_LOGGING` flag
+- Always logs errors regardless of logging flag
+- Delegates Sync operations to private helper
+
+### Sync Integration
+`functions/realtimeTranscriptionSyncHelper.private.js` - Manages Sync resources and routes transcription events
+
+**Key Features:**
+- Conditional resource creation based on `REALTIME_TRANSCRIPTION_PARTIAL_RESULTS` flag
+- Routes events to appropriate handlers (partial, final, stopped)
+- Lazy initialization (only creates resources when needed)
+- Uses syncHelper utilities for all Sync operations
+
+### Sync Utilities
+`functions/syncHelper.private.js` - Low-level CRUD operations for Twilio Sync
+
+**Key Features:**
+- All REST API calls are internal to this module
+- Accepts `client` and `syncServiceSid` parameters (not pre-configured syncService object)
+- Handles concurrent creation attempts and race conditions
+- See `SYNC_HELPER.md` for complete API documentation
 
 ### Configuration Files
 - `assets/config.json` - Phone number to conversation config mapping (private asset)
@@ -671,6 +714,21 @@ twilio api:taskrouter:v1:workspaces:tasks:list --workspace-sid WSxxxx
 
 ---
 
-**Implementation Version:** 1.0
-**Last Updated:** 2026-02-16
+## Related Documentation
+
+- `REALTIME_TRANSCRIPTION_SYNC.md` - Detailed documentation on Sync integration, data structures, and performance characteristics
+- `SYNC_HELPER.md` - Complete API reference for syncHelper module with examples and best practices
+
+---
+
+**Implementation Version:** 2.0
+**Last Updated:** 2026-02-17
 **Tested with:** Twilio Serverless Runtime Node.js 18
+
+**Version 2.0 Changes:**
+- Refactored Sync operations into separate private functions for better organization
+- Added `DETAILED_TRANSCRIPTION_LOGGING` environment variable for verbose logging
+- Updated syncHelper API to accept `client` and `syncServiceSid` parameters
+- Removed sequence ID from list items (lists use timestamp ordering only)
+- Added conditional document creation based on `REALTIME_TRANSCRIPTION_PARTIAL_RESULTS`
+- Improved performance with global-level module imports

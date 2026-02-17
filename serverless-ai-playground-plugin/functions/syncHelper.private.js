@@ -161,15 +161,6 @@ async function updateDocumentWithSequence(
 ) {
   const syncService = client.sync.v1.services(syncServiceSid);
 
-  console.log(
-    'Updating Sync Doc:',
-    docName,
-    attributeName,
-    'seq:',
-    sequenceId,
-    JSON.stringify(data)
-  );
-
   // Fetch current document to get revision (etag)
   const { resource: doc } = await ensureDocument(client, syncServiceSid, docName, {});
   const currentData = doc.data || {};
@@ -181,9 +172,6 @@ async function updateDocumentWithSequence(
     attributeData.sequenceId &&
     parseInt(attributeData.sequenceId) >= parseInt(sequenceId)
   ) {
-    console.log(
-      `Skipping stale update: current=${attributeData.sequenceId}, incoming=${sequenceId}`
-    );
     return doc;
   }
 
@@ -202,7 +190,6 @@ async function updateDocumentWithSequence(
   } catch (error) {
     // Error code 54103 = revision mismatch (document was modified)
     if (error.code === 54103) {
-      console.log('Revision mismatch, retrying...');
       // Wait and retry
       await new Promise((resolve) => setTimeout(resolve, 500));
       return await updateDocumentWithSequence(
