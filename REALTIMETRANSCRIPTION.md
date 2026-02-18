@@ -15,16 +15,19 @@ The tab renders this data in real-time as a scrollable conversation view, with C
 
 ### Sync Tracking (`src/initCallSyncTracking.ts`)
 
-On plugin init, two things happen:
+On plugin init, three things happen:
 
 1. An `afterAcceptTask` action listener starts tracking the Sync Map for any newly accepted call task.
-2. Any call tasks already present in `state.flex.worker.tasks` are scanned and tracked immediately. This handles plugin reloads mid-call.
+2. `afterCompleteTask` and `afterCancelTask` listeners untrack the Sync Map, closing all Sync object subscriptions and removing data from Redux.
+3. Any call tasks already present in `state.flex.worker.tasks` are scanned and tracked immediately. This handles plugin reloads mid-call.
 
 The tracking is done via `SyncToReduxService.trackSync()`, which opens the Sync Map, discovers the referenced Sync objects (document + list), subscribes to their real-time events, and mirrors all data into the Redux store under `state['ai-playground'].syncToRedux.trackedMaps`.
 
 ### Tab Visibility (`src/AiPlaygroundPlugin.tsx`)
 
 The tab is registered on `TaskCanvasTabs` with an `if` condition that shows it for any voice call task with a `call_sid`. The component handles the "no data yet" state internally, which avoids the problem of Flex's `if` function not re-evaluating when custom Redux state changes.
+
+The plugin also registers an AI Playground panel on `AgentDesktopView.Panel2` for operator results. See [AIPLAYGROUNDPANEL.md](AIPLAYGROUNDPANEL.md) for details.
 
 ### Tab Component (`src/components/RealTimeTranscription/`)
 
@@ -40,9 +43,9 @@ Messages are displayed newest-first. Agent messages are right-aligned, Customer 
 
 ```
 src/
-  AiPlaygroundPlugin.tsx                        — Plugin entry: Paste, Redux, sync tracking, tab registration
-  initPaste.tsx                                 — CustomizationProvider setup for Paste components
-  initCallSyncTracking.ts                       — afterAcceptTask listener + existing task scan
+  AiPlaygroundPlugin.tsx                        — Plugin entry: Paste, Redux, sync tracking, tab + panel registration
+  initPaste.tsx                                 — CustomizationProvider setup with operator tab element customizations
+  initCallSyncTracking.ts                       — afterAcceptTask / afterCompleteTask / afterCancelTask listeners
   components/
     RealTimeTranscription/
       index.ts                                  — Barrel export

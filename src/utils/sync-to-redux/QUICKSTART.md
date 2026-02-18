@@ -295,17 +295,21 @@ src/utils/sync-to-redux/
 
 ### Track on Task Accept
 ```typescript
-manager.workerClient.on('reservationAccepted', async (reservation) => {
-  const callSid = reservation.task.attributes.call_sid;
-  await SyncToReduxService.trackSync(callSid);
+flex.Actions.addListener('afterAcceptTask', (payload: { task: Flex.ITask }) => {
+  const callSid = payload.task.attributes?.call_sid;
+  if (callSid) {
+    SyncToReduxService.trackSync(`ai-playground-${callSid}`, 'metadata');
+  }
 });
 ```
 
 ### Untrack on Task Complete
 ```typescript
-manager.workerClient.on('reservationWrapup', async (reservation) => {
-  const callSid = reservation.task.attributes.call_sid;
-  await SyncToReduxService.untrackSync(callSid);
+flex.Actions.addListener('afterCompleteTask', (payload: { task: Flex.ITask }) => {
+  const callSid = payload.task.attributes?.call_sid;
+  if (callSid) {
+    SyncToReduxService.untrackSync(`ai-playground-${callSid}`);
+  }
 });
 ```
 

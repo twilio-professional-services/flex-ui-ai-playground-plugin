@@ -43,6 +43,7 @@ All components of the SyncToRedux provider have been successfully implemented ac
 7. **Plugin Integration**
    - Redux reducer registration in plugin's init method
    - SyncToRedux service initialization with namespace
+   - Call tracking via Flex Actions (`afterAcceptTask`, `afterCompleteTask`, `afterCancelTask`)
    - No additional dependencies required
 
 ## Verification
