@@ -9,7 +9,8 @@
   },
   "dependencies": {
     "twilio": "5.12.1",
-    "@twilio/runtime-handler": "2.0.3"
+    "@twilio/runtime-handler": "2.0.3",
+    "twilio-flex-token-validator": "^1.6.0"
   },
   "devDependencies": {
     "twilio-run": "^4.2.0"

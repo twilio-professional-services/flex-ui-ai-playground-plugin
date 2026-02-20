@@ -6,7 +6,7 @@ import { Tabs, Tab, TabList, TabPanel, TabPanels, useTabState } from '@twilio-pa
 import { useUID } from '@twilio-paste/core/uid-library';
 import RealtimeOperatorsTab from './RealtimeOperatorsTab';
 import PostCallOperatorsTab from './PostCallOperatorsTab';
-import CustomerMemoryTab from './CustomerMemoryTab';
+import CustomerMemoryTab from './CustomerMemory';
 
 interface AiPlaygroundPanelProps {
   tasks?: Map<string, Flex.ITask>;
@@ -44,7 +44,7 @@ const AiPlaygroundPanel: React.FC<AiPlaygroundPanelProps> = ({ tasks, selectedTa
               <PostCallOperatorsTab task={task} />
             </TabPanel>
             <TabPanel>
-              <CustomerMemoryTab />
+              <CustomerMemoryTab task={task} />
             </TabPanel>
           </TabPanels>
         </Box>

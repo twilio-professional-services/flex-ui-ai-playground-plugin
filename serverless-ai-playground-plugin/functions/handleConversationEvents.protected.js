@@ -55,20 +55,32 @@ exports.handler = async (context, event, callback) => {
       `[ConversationEvents] ${participantName} matches account number, updating to HUMAN_AGENT`,
     );
 
-    // Update participant type via v2 Conversations API
+    // Update participant type via v2 Conversations API (not in Twilio Node SDK, use fetch)
     const { conversationId, id: participantId, accountId } = data;
+    const authHeader =
+      "Basic " +
+      Buffer.from(`${context.ACCOUNT_SID}:${context.AUTH_TOKEN}`).toString(
+        "base64",
+      );
 
-    await client.request({
-      method: "PUT",
-      uri: `https://conversations.twilio.com/v2/Conversations/${conversationId}/Participants/${participantId}`,
-      headers: {
-        "X-Pre-Auth-Context": accountId,
-        "Content-Type": "application/json",
+    const updateRes = await fetch(
+      `https://conversations.twilio.com/v2/Conversations/${conversationId}/Participants/${participantId}`,
+      {
+        method: "PUT",
+        headers: {
+          Authorization: authHeader,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ type: "HUMAN_AGENT" }),
       },
-      body: JSON.stringify({
-        type: "HUMAN_AGENT",
-      }),
-    });
+    );
+
+    if (!updateRes.ok) {
+      const errBody = await updateRes.text().catch(() => "");
+      throw new Error(
+        `Conversations API returned ${updateRes.status}: ${errBody}`,
+      );
+    }
 
     console.log(
       `[ConversationEvents] Updated participant ${participantId} to HUMAN_AGENT`,

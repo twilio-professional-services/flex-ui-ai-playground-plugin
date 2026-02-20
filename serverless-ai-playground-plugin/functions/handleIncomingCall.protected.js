@@ -35,7 +35,7 @@ exports.handler = (context, event, callback) => {
     const callSid = event.CallSid;
 
     console.log(
-      `Incoming call from ${callerNumber} to ${dialedNumber} (${callSid})`
+      `Incoming call from ${callerNumber} to ${dialedNumber} (${callSid})`,
     );
 
     // ===== Map Phone Number to Configuration =====
@@ -52,14 +52,19 @@ exports.handler = (context, event, callback) => {
     // ===== Conditional Real-Time Transcription =====
     const transcriptionEnabled = isEnabled(context.REALTIME_TRANSCRIPTION);
     const partialResultsEnabled = isEnabled(
-      context.REALTIME_TRANSCRIPTION_PARTIAL_RESULTS
+      context.REALTIME_TRANSCRIPTION_PARTIAL_RESULTS,
     );
 
     if (transcriptionEnabled) {
       console.log("Real-time transcription enabled");
 
       // Construct webhook URL
-      const webhookUrl = `https://${context.TRANSCRIPTION_DOMAIN}/handleRealtimeTranscription`;
+      // Domain priority: TRANSCRIPTION_DOMAIN_OVERRIDE > context.DOMAIN_NAME > TRANSCRIPTION_DOMAIN_WHEN_RUN_LOCAL
+      const transcriptionDomain =
+        context.TRANSCRIPTION_DOMAIN_OVERRIDE ||
+        context.DOMAIN_NAME ||
+        context.TRANSCRIPTION_DOMAIN_WHEN_RUN_LOCAL;
+      const webhookUrl = `https://${transcriptionDomain}/handleRealtimeTranscription`;
 
       // Start transcription using SDK 5.12.1+
       const start = twiml.start();
@@ -104,7 +109,7 @@ exports.handler = (context, event, callback) => {
     const fallbackTwiml = new Twilio.twiml.VoiceResponse();
     fallbackTwiml.say(
       { voice: "Polly.Joanna" },
-      "We are experiencing technical difficulties. Please try again later."
+      "We are experiencing technical difficulties. Please try again later.",
     );
 
     return callback(null, fallbackTwiml);
