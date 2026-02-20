@@ -4,12 +4,13 @@ A Flex UI Panel 2 component that displays AI operator results in real-time durin
 
 ## Overview
 
-When an agent is on a voice call, Panel 2 shows the AI Playground with two top-level tabs:
+When an agent is on a voice call, Panel 2 shows the AI Playground with three top-level tabs:
 
 - **Realtime Operators** — results from operators triggered during the conversation (`OPERATOR-COMMUNICATION-*`)
 - **Post Call Operators** — results from operators triggered after the conversation ends (`OPERATOR-CONVERSATION_END-*`)
+- **Customer Memory** — profile lookup via Memora, showing recalled memories, observations, conversation summaries, and traits for the caller
 
-Each tab discovers operator keys dynamically from the tracked Sync Map's `syncObjects` and renders a subtab per operator. Subtabs appear automatically as operator data arrives.
+The operator tabs discover keys dynamically from the tracked Sync Map's `syncObjects` and render a subtab per operator. Subtabs appear automatically as operator data arrives. The Customer Memory tab uses the task's `from` attribute to look up the caller's Memora profile via a serverless proxy.
 
 ## Component Architecture
 
@@ -34,6 +35,17 @@ Panel 2
             Tab: "AgentCoaching"
               OperatorResultCard
             ... (auto-discovered from syncObjects)
+      Tab: "Customer Memory"
+        CustomerMemoryTab (looks up caller profile via Memora)
+          Paste Tabs (static, four sub-tabs)
+            Tab: "Memory Retrieval"
+              MemoriesPanel (semantic search via Recall API)
+            Tab: "Observations"
+              ObservationsPanel (paginated observations list)
+            Tab: "Conversation Summaries"
+              ConversationSummariesPanel (paginated summaries list)
+            Tab: "Traits"
+              TraitsPanel (paginated traits list)
 ```
 
 ## How It Works
@@ -44,9 +56,15 @@ The panel is registered on `AgentDesktopView.Panel2.Content` with an `if` condit
 
 ### Data Access Pattern
 
+**Operator tabs:**
 - `RealtimeOperatorsTab` / `PostCallOperatorsTab` use `useTrackedMap(mapName)` to access the full tracked map from Redux
 - Filter `syncObjects` keys matching `OPERATOR-COMMUNICATION-*` or `OPERATOR-CONVERSATION_END-*`
 - Each `OperatorResultCard` receives the `items` array for one operator
+
+**Customer Memory tab:**
+- `CustomerMemoryTab` reads `task.attributes.from` to get the caller's phone number
+- `useProfileLookup` hook calls the `memoraProxy` serverless function with `action: 'lookup'` to resolve a Memora profile ID
+- Sub-panels use paginated hooks (`useObservations`, `useTraits`, `useConversationSummaries`) and `useRecall` for semantic search, all proxied through the same serverless function
 
 ### Result Rendering (`OperatorResultCard`)
 
@@ -100,6 +118,15 @@ src/components/AiPlayground/
   OperatorResultCard.tsx        Renders one operator's result with navigation + arrival animation
   types.ts                      TypeScript interfaces for operator data
   utils.ts                      Key filtering, result formatting helpers
+  CustomerMemory/
+    index.ts                    Barrel export
+    CustomerMemoryTab.tsx       Profile lookup + four sub-tabs
+    MemoriesPanel.tsx           Memory Retrieval (Recall API with semantic search)
+    ObservationsPanel.tsx       Paginated observations list
+    ConversationSummariesPanel.tsx  Paginated conversation summaries list
+    TraitsPanel.tsx             Paginated traits list
+    useMemora.ts                Memora API hooks (useProfileLookup, useRecall, useObservations, etc.)
+    types.ts                    Memora API response types
 ```
 
 ## Data Structures
@@ -147,5 +174,7 @@ src/components/AiPlayground/
 - `@twilio-paste/core/uid-library` — useUID for tab IDs
 - `@twilio-paste/core/animation-library` — useSpring, animated for arrival animation
 - `@twilio-paste/core/box`, `@twilio-paste/core/text`, `@twilio-paste/core/badge`, `@twilio-paste/core/button`, `@twilio-paste/core/tooltip` — UI primitives
-- `@twilio/flex-ui` — ITask, TaskHelper
+- `@twilio-paste/core/spinner`, `@twilio-paste/core/alert` — Customer Memory loading/error states
+- `@twilio/flex-ui` — ITask, TaskHelper, Manager (for Flex token in Memora proxy calls)
 - `SyncToReduxService` + `useTrackedMap` hook — reactive Redux access to Sync data
+- `memoraProxy` serverless function — proxies Memora API calls with Flex token auth

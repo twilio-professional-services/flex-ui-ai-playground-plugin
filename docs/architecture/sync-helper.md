@@ -626,6 +626,6 @@ Potential additions to the helper:
 
 ## Related Documentation
 
-- `REALTIME_TRANSCRIPTION_SYNC.md` - How transcription handler uses this helper
+- [realtime-transcription-sync.md](realtime-transcription-sync.md) - How transcription handler uses this helper
 - [Twilio Sync REST API](https://www.twilio.com/docs/sync/api) - Official Sync API reference
-- `src/utils/sync-to-redux/INDEX.md` - SyncToRedux pattern documentation
+- [SyncToRedux pattern documentation](../../src/utils/sync-to-redux/INDEX.md)

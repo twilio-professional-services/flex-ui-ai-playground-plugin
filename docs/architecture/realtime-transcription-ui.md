@@ -27,7 +27,7 @@ The tracking is done via `SyncToReduxService.trackSync()`, which opens the Sync 
 
 The tab is registered on `TaskCanvasTabs` with an `if` condition that shows it for any voice call task with a `call_sid`. The component handles the "no data yet" state internally, which avoids the problem of Flex's `if` function not re-evaluating when custom Redux state changes.
 
-The plugin also registers an AI Playground panel on `AgentDesktopView.Panel2` for operator results. See [AIPLAYGROUNDPANEL.md](AIPLAYGROUNDPANEL.md) for details.
+The plugin also registers an AI Playground panel on `AgentDesktopView.Panel2` for operator results. See [ai-playground-panel.md](ai-playground-panel.md) for details.
 
 ### Tab Component (`src/components/RealTimeTranscription/`)
 
@@ -67,11 +67,14 @@ src/
   "track": "outbound_track",
   "confidence": 0.95,
   "timestamp": "2026-02-17T10:30:00.000Z",
-  "sequenceId": 1,
+  "stability": 0.92,
   "isFinal": true,
-  "languageCode": "en-US"
+  "languageCode": "en-US",
+  "transcriptionSid": "GTa92ddf2576534cbe923ebb5c057ce814"
 }
 ```
+
+**Note:** List items do not include `sequenceId` — lists are append-only and use insertion order. Sequence IDs are only used in the partial transcript document for ordering.
 
 ### Event Item (from Sync List)
 
@@ -79,28 +82,30 @@ src/
 {
   "event": "transcription-stopped",
   "callSid": "CA...",
-  "sequenceId": 10,
   "timestamp": "2026-02-17T10:35:00.000Z"
 }
 ```
 
 ### Partial Transcript (from Sync Document)
 
+Only the `inbound_track` (customer) is written to the document. The document is updated via `updateDocumentWithSequence` which adds the `sequenceId` for ordering.
+
 ```json
 {
   "inbound_track": {
-    "text": "I was wondering if...",
     "sequenceId": 5,
-    "cleared": false
-  },
-  "outbound_track": {
-    "text": "",
-    "sequenceId": 3,
-    "cleared": true,
-    "clearedAt": "2026-02-17T10:30:01.000Z"
+    "text": "I was wondering if...",
+    "timestamp": "2026-02-17T10:30:00.000Z",
+    "confidence": 0.83,
+    "stability": 0.85,
+    "languageCode": "en-US",
+    "isFinal": false,
+    "transcriptionSid": "GTa92ddf2576534cbe923ebb5c057ce814"
   }
 }
 ```
+
+When speech is finalized, the text is cleared: `{ "sequenceId": 6, "text": "" }`. When transcription stops, `cleared: true` and `clearedAt` are added.
 
 - `track`: `inbound_track` = Customer, `outbound_track` = Agent
 - `confidence`: values below 0.7 trigger a "Low confidence" indicator

@@ -90,6 +90,7 @@ Stores **all final transcripts** from **both tracks** in chronological order.
   "text": "Transcription event.",
   "timestamp": "2026-02-17T02:29:39.026605605Z",
   "confidence": 0.83721834,
+  "stability": 0.92,
   "languageCode": "en-US",
   "isFinal": true,
   "transcriptionSid": "GTa92ddf2576534cbe923ebb5c057ce814",
@@ -398,4 +399,4 @@ twilio api:sync:v1:services:sync-lists:sync-list-items:list \
 - `functions/handleRealtimeTranscription.protected.js` - Main webhook handler (receives events, handles logging)
 - `functions/realtimeTranscriptionSyncHelper.private.js` - Sync integration logic (routes events, manages resources)
 - `functions/syncHelper.private.js` - Reusable Sync CRUD operations (all REST API calls)
-- `SYNC_HELPER.md` - Documentation for syncHelper module
+- [sync-helper.md](sync-helper.md) - Documentation for syncHelper module

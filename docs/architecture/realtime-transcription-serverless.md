@@ -88,14 +88,19 @@ AUTH_TOKEN=your_auth_token_here
 WORKFLOW_SID=WWxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 
 # Transcription Configuration
-TRANSCRIPTION_DOMAIN=your-service-name-1234.twil.io
+# Domain priority: TRANSCRIPTION_DOMAIN_OVERRIDE > context.DOMAIN_NAME > TRANSCRIPTION_DOMAIN_WHEN_RUN_LOCAL
+TRANSCRIPTION_DOMAIN_OVERRIDE=
+TRANSCRIPTION_DOMAIN_WHEN_RUN_LOCAL=your-service-name-1234-dev.twil.io
 REALTIME_TRANSCRIPTION=true
-REALTIME_TRANSCRIPTION_PARTIAL_RESULTS=false
+REALTIME_TRANSCRIPTION_PARTIAL_RESULTS=true
 DETAILED_TRANSCRIPTION_LOGGING=false
 
 # Sync Configuration
-SYNC_SERVICE_SID=default
+SYNC_SERVICE_SID=ISxxx
 PARTIAL_STABLE_THRESHOLD=0.7
+
+# Memora (Customer Memory) Configuration
+MEMORA_STORE_ID=mem_store_xxxxxxxxxxxxxxxxxxxxxxxxxxxx
 ```
 
 #### Environment Variable Reference
@@ -105,18 +110,22 @@ PARTIAL_STABLE_THRESHOLD=0.7
 | `ACCOUNT_SID` | Yes | `ACxxxx...` | Twilio Account SID |
 | `AUTH_TOKEN` | Yes | String | Twilio Auth Token |
 | `WORKFLOW_SID` | Yes | `WWxxxx...` | TaskRouter Workflow SID |
-| `TRANSCRIPTION_DOMAIN` | Yes | `service-1234.twil.io` | Serverless domain (no https://) |
+| `TRANSCRIPTION_DOMAIN_OVERRIDE` | No | `your-domain.twil.io` | Force a specific transcription webhook domain (useful for ngrok/tunnels). Overrides all other domain sources. |
+| `TRANSCRIPTION_DOMAIN_WHEN_RUN_LOCAL` | No | `your-domain.twil.io` | Fallback transcription webhook domain for local development. Used when `TRANSCRIPTION_DOMAIN_OVERRIDE` is empty and `context.DOMAIN_NAME` is unavailable. |
 | `REALTIME_TRANSCRIPTION` | Yes | `true`/`false` | Enable transcription (case-insensitive) |
 | `REALTIME_TRANSCRIPTION_PARTIAL_RESULTS` | Yes | `true`/`false` | Enable partial results & Sync document (case-insensitive) |
 | `DETAILED_TRANSCRIPTION_LOGGING` | No | `true`/`false` | Enable detailed logging of all webhook events (default: `false`) |
 | `SYNC_SERVICE_SID` | No | `ISxxxx` or `default` | Sync service SID or name (default: `default`) |
 | `PARTIAL_STABLE_THRESHOLD` | No | `0.0` - `1.0` | Stability threshold for partial transcripts (default: `0.7`) |
+| `MEMORA_STORE_ID` | No | `mem_store_xxx` | Memora store ID for Customer Memory features |
+
+**Note on domain resolution:** When deployed to Twilio, `context.DOMAIN_NAME` is auto-populated with the service domain. Locally, this is empty, so `TRANSCRIPTION_DOMAIN_WHEN_RUN_LOCAL` is used as fallback. `TRANSCRIPTION_DOMAIN_OVERRIDE` always takes priority when set.
 
 **Note:** Boolean flags are case-insensitive. All of these work: `true`, `True`, `TRUE`, `false`, `False`, `FALSE`
 
 ### 2. Phone Number Configuration
 
-Edit `assets/config.json`:
+Edit `assets/config.private.json` (accessed as `/config.json` at runtime via `Runtime.getAssets()`):
 
 ```json
 {
@@ -245,46 +254,44 @@ If no targetWorkers are configured for the dialed number, an empty object `{}` i
 
 ## Webhook Event Examples
 
-The `handleRealtimeTranscription.protected.js` function receives various event types from Twilio.
+The `handleRealtimeTranscription.protected.js` function receives various event types from Twilio. Events are delivered as form-encoded POST bodies.
 
 ### Event Type: `transcription-started`
 
 Sent when transcription session begins.
 
-```json
-{
-  "Event": "transcription-started",
-  "CallSid": "CAxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
-  "AccountSid": "ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
-  "Track": "inbound_track",
-  "TranscriptionSid": "TRxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
-}
+```
+TranscriptionEvent: transcription-started
+CallSid: CAxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+AccountSid: ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+Track: inbound_track
+TranscriptionSid: GTxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
 ```
 
 ### Event Type: `transcription-content`
 
 Sent when transcription text is available (final or partial).
 
-```json
-{
-  "Event": "transcription-content",
-  "CallSid": "CAxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
-  "AccountSid": "ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
-  "Track": "inbound_track",
-  "TranscriptionSid": "TRxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
-  "TranscriptionText": "Hello, I need help with my account",
-  "IsFinal": "true",
-  "Confidence": "0.95",
-  "LanguageCode": "en-US",
-  "Timestamp": "2026-02-16T10:30:45.123Z"
-}
+```
+TranscriptionEvent: transcription-content
+CallSid: CAxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+AccountSid: ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+Track: inbound_track
+TranscriptionSid: GTxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+TranscriptionData: {"transcript":"Hello, I need help with my account","confidence":0.95}
+Final: true
+SequenceId: 7
+LanguageCode: en-US
+Timestamp: 2026-02-16T10:30:45.123Z
+Stability: 0.85
 ```
 
 **Content Fields:**
 
-- `TranscriptionText`: The transcribed text
-- `IsFinal`: `true` for final results, `false` for partial (if enabled)
-- `Confidence`: Confidence score (0.0 to 1.0)
+- `TranscriptionData`: JSON string containing `transcript` (text) and `confidence` (0.0-1.0)
+- `Final`: `true` for final results, `false` for partial (if enabled)
+- `SequenceId`: Monotonically increasing ID per utterance (used for document ordering)
+- `Stability`: How likely the partial transcript is to change (0.0-1.0, only present for partials)
 - `LanguageCode`: Detected/configured language
 - `Timestamp`: When the speech occurred
 
@@ -292,37 +299,34 @@ Sent when transcription text is available (final or partial).
 
 Sent when transcription session ends (call ends or transcription stopped).
 
-```json
-{
-  "Event": "transcription-stopped",
-  "CallSid": "CAxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
-  "AccountSid": "ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
-  "Track": "inbound_track",
-  "TranscriptionSid": "TRxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
-}
+```
+TranscriptionEvent: transcription-stopped
+CallSid: CAxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+AccountSid: ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+Track: inbound_track
+TranscriptionSid: GTxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+SequenceId: 15
 ```
 
 ### Event Type: `transcription-error`
 
 Sent when an error occurs during transcription.
 
-```json
-{
-  "Event": "transcription-error",
-  "CallSid": "CAxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
-  "AccountSid": "ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
-  "Track": "inbound_track",
-  "TranscriptionSid": "TRxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx",
-  "ErrorCode": "12345",
-  "ErrorMessage": "Description of the error"
-}
+```
+TranscriptionEvent: transcription-error
+CallSid: CAxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+AccountSid: ACxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+Track: inbound_track
+TranscriptionSid: GTxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx
+ErrorCode: 12345
+ErrorMessage: Description of the error
 ```
 
 ## Testing Procedures
 
 ### 1. Configuration Loading Test
 
-Verify the system loads `config.json` correctly:
+Verify the system loads `config.private.json` correctly:
 
 1. Deploy the functions
 2. Make a test call to one of your configured Twilio phone numbers
@@ -342,10 +346,13 @@ Test real-time transcription functionality:
 1. Set `REALTIME_TRANSCRIPTION=true` in `.env`
 2. Deploy the functions
 3. Make a test call and speak clearly
-4. Check Function logs for transcription events:
+4. Check Function logs for transcription events (basic logging):
    ```
-   === Real-Time Transcription Event ===
-   Timestamp: 2026-02-16T10:30:45.123Z
+   [Transcription] transcription-content - CallSID: CAxxxx...
+   ```
+   Or with `DETAILED_TRANSCRIPTION_LOGGING=true`:
+   ```
+   === Real-Time Transcription Event (Detailed) ===
    Complete Event Payload: { ... }
    Extracted Key Fields:
    - Event Type: transcription-content
@@ -381,7 +388,7 @@ Test interim transcription results:
 1. Set `REALTIME_TRANSCRIPTION=true` and `REALTIME_TRANSCRIPTION_PARTIAL_RESULTS=true`
 2. Deploy the functions
 3. Make a test call and speak a long sentence slowly
-4. Check Function logs for `transcription-content` events with `IsFinal: false`
+4. Check Function logs for `transcription-content` events with `Final: false`
 
 **Expected:** Multiple events per sentence - partial results followed by final.
 
@@ -401,7 +408,7 @@ Verify task creation and attributes:
 
 Test routing to specific workers:
 
-1. Configure `targetWorkers` for a phone number in `config.json`
+1. Configure `targetWorkers` for a phone number in `config.private.json`
 2. Ensure workflow has targeting filter configured
 3. Make a call to that phone number
 4. Check Function logs show task attributes:
@@ -417,29 +424,29 @@ Test routing to specific workers:
 
 ### 7. Fallback Behavior Test
 
-Test error handling and fallbacks:
+Test error handling when config fails to load:
 
-1. Temporarily rename `config.json` to `config.json.bak`
+1. Temporarily rename `config.private.json` to `config.private.json.bak`
 2. Deploy and make a test call
 3. Check logs for:
    ```
-   Error loading configuration, using defaults: ...
-   Using conversation config: conv_configuration_xxx
+   Error loading configuration: ...
+   Critical error in handleIncomingCall: ...
    ```
-4. Verify call still connects successfully
+4. Verify the call still answers (with a TwiML `<Say>` fallback message)
 
-**Expected:** System uses default config, call doesn't fail.
+**Expected:** Call answers with "We are experiencing technical difficulties" rather than failing silently. Config loading is required — there is no default fallback config.
 
 ## Troubleshooting Guide
 
 ### Problem: Configuration Not Loading
 
 **Symptoms:**
-- Logs show: "Error loading configuration, using defaults"
-- Wrong conversation config being used
+- Logs show: "Error loading configuration:" followed by "Critical error in handleIncomingCall"
+- Call answers with "technical difficulties" message instead of routing
 
 **Solutions:**
-1. Verify `config.json` exists in `assets/` directory
+1. Verify `config.private.json` exists in `assets/` directory
 2. Check JSON syntax is valid (use JSON validator)
 3. Ensure file is included in deployment
 4. Check file permissions
@@ -452,7 +459,7 @@ Test error handling and fallbacks:
 
 **Solutions:**
 1. Verify `REALTIME_TRANSCRIPTION=true` (check spelling and case)
-2. Confirm `TRANSCRIPTION_DOMAIN` matches deployed domain
+2. Confirm domain resolution is correct: `TRANSCRIPTION_DOMAIN_OVERRIDE` or `TRANSCRIPTION_DOMAIN_WHEN_RUN_LOCAL` matches deployed domain
 3. Check webhook URL is accessible (test with curl)
 4. Verify Conversation Intelligence Service ID is valid
 5. Ensure microphone is working (test with another app)
@@ -519,7 +526,7 @@ Test error handling and fallbacks:
 - Wrong intelligence service applied
 
 **Solutions:**
-1. Verify phone number in `config.json` matches the **dialed number (To)** exactly - this is YOUR Twilio number, not the caller's number
+1. Verify phone number in `config.private.json` matches the **dialed number (To)** exactly - this is YOUR Twilio number, not the caller's number
 2. Check E.164 format: `+15555551234` (not `15555551234`)
 3. Confirm `defaultConversationConfigId` is set correctly
 4. Check logs for phone number mapping: "Incoming call from X to Y" - the "to Y" number should match your config keys
@@ -554,8 +561,8 @@ twilio serverless:deploy
 
 1. **Capture Domain:**
    - Note the deployed domain from output: `Deployed to: https://your-service-1234-dev.twil.io`
-   - Update `TRANSCRIPTION_DOMAIN` in `.env` if it changed
-   - Redeploy if you updated `.env`
+   - When deployed, `context.DOMAIN_NAME` is auto-populated, so no env var update is needed
+   - For local development, update `TRANSCRIPTION_DOMAIN_WHEN_RUN_LOCAL` in `.env` with the deployed domain
 
 2. **Configure Phone Numbers:**
    - In Twilio Console, go to Phone Numbers
@@ -620,7 +627,7 @@ curl -X POST https://your-service-1234-dev.twil.io/handleIncomingCall \
 - All REST API calls are internal to this module
 - Accepts `client` and `syncServiceSid` parameters (not pre-configured syncService object)
 - Handles concurrent creation attempts and race conditions
-- See `SYNC_HELPER.md` for complete API documentation
+- See [sync-helper.md](sync-helper.md) for complete API documentation
 
 ### Configuration Files
 - `assets/config.json` - Phone number to conversation config mapping (private asset)
@@ -636,51 +643,14 @@ config = JSON.parse(configData);
 ```
 This pattern is required as `.open` is a property that returns a function, not a method.
 
-## Next Steps and Enhancements
+## Implemented Features (formerly "Next Steps")
 
-### Potential Improvements
+The following capabilities from the original roadmap have been implemented:
 
-1. **Transcription Storage**
-   - Store transcripts in Twilio Sync or external database
-   - Enable post-call analysis and reporting
-
-2. **Advanced Routing**
-   - Use transcription content for intelligent routing
-   - Route based on detected keywords or sentiment
-   - Dynamic worker targeting based on skills
-
-3. **Real-Time Agent Assist**
-   - Display live transcription to agents in Flex UI
-   - Provide real-time suggestions based on conversation
-   - Highlight action items or key information
-
-4. **Analytics Integration**
-   - Send transcription events to analytics platform
-   - Track conversation metrics and KPIs
-   - Generate insights on call patterns
-
-5. **Multi-Language Support**
-   - Detect language automatically
-   - Route to language-appropriate agents
-   - Use multiple conversation configs per language
-
-6. **Quality Monitoring**
-   - Track transcription accuracy
-   - Monitor confidence scores
-   - Alert on low-quality transcriptions
-
-7. **Custom Actions**
-   - Trigger workflows based on transcription content
-   - Automate responses to common phrases
-   - Create tasks or tickets from conversation
-
-### Integration Opportunities
-
-- **Twilio Studio**: Use transcription in Studio flows for IVR
-- **Flex Insights**: Export transcription metrics
-- **Flex Plugins**: Build UI to display transcripts to agents
-- **Segment**: Send conversation events to customer data platform
-- **Salesforce**: Sync transcripts to case records
+- **Transcription Storage** — transcripts stored in Twilio Sync (documents for partials, lists for finals)
+- **Real-Time Agent Assist** — live transcription displayed in Flex UI via the RealTime Transcription tab
+- **AI Operator Results** — Conversation Intelligence operator results (Sentiment, Summary, etc.) displayed in the AI Playground panel
+- **Customer Memory** — Memora profile lookup with recall, observations, traits, and conversation summaries
 
 ## Support and Resources
 
@@ -716,14 +686,22 @@ twilio api:taskrouter:v1:workspaces:tasks:list --workspace-sid WSxxxx
 
 ## Related Documentation
 
-- `REALTIME_TRANSCRIPTION_SYNC.md` - Detailed documentation on Sync integration, data structures, and performance characteristics
-- `SYNC_HELPER.md` - Complete API reference for syncHelper module with examples and best practices
+- [realtime-transcription-sync.md](realtime-transcription-sync.md) - Detailed documentation on Sync integration, data structures, and performance characteristics
+- [sync-helper.md](sync-helper.md) - Complete API reference for syncHelper module with examples and best practices
 
 ---
 
-**Implementation Version:** 2.0
-**Last Updated:** 2026-02-17
-**Tested with:** Twilio Serverless Runtime Node.js 18
+**Implementation Version:** 2.1
+**Last Updated:** 2026-02-20
+**Tested with:** Twilio Serverless Runtime Node.js 22
+
+**Version 2.1 Changes:**
+- Replaced `TRANSCRIPTION_DOMAIN` with three-tier domain resolution: `TRANSCRIPTION_DOMAIN_OVERRIDE` > `context.DOMAIN_NAME` > `TRANSCRIPTION_DOMAIN_WHEN_RUN_LOCAL`
+- Added `MEMORA_STORE_ID` environment variable for Customer Memory features
+- Added `memoraProxy` serverless function for Memora API access
+- Added `handleOperatorResult` function for Conversation Intelligence operator results
+- Added `handleTaskRouterWorkspaceWebhook` function for conversation cleanup
+- Config loading failure now returns error TwiML instead of using defaults
 
 **Version 2.0 Changes:**
 - Refactored Sync operations into separate private functions for better organization
