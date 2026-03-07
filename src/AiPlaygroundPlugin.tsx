@@ -9,6 +9,8 @@ import { initPaste } from './initPaste';
 import { initCallSyncTracking } from './initCallSyncTracking';
 import RealTimeTranscriptionTab from './components/RealTimeTranscription';
 import { AiPlaygroundPanel } from './components/AiPlayground';
+import SupervisorCallTracker from './components/Supervisor/SupervisorCallTracker';
+import SupervisorOperatorResultsTab from './components/Supervisor/SupervisorOperatorResultsTab';
 
 const PLUGIN_NAME = 'AiPlaygroundPlugin';
 
@@ -40,6 +42,15 @@ export default class AiPlaygroundPlugin extends FlexPlugin {
 
     initCallSyncTracking(flex, manager);
 
+    // Register supervisor call tracker in TeamsView
+    flex.TeamsView.Content.add(
+      <SupervisorCallTracker key="supervisor-call-tracker" />,
+      {
+        sortOrder: -999,
+        align: 'start',
+      }
+    );
+
     // Register transcription tab for voice calls
     flex.TaskCanvasTabs.Content.add(
       <Flex.Tab
@@ -51,6 +62,38 @@ export default class AiPlaygroundPlugin extends FlexPlugin {
       </Flex.Tab>,
       {
         sortOrder: 10,
+        if: ({ task }: { task: Flex.ITask }) =>
+          TaskHelper.isCallTask(task) && !!task.attributes?.call_sid,
+      }
+    );
+
+    // Register transcription tab for supervisor view
+    flex.Supervisor.TaskCanvasTabs.Content.add(
+      <Flex.Tab
+        key="supervisor-realtime-transcription"
+        uniqueName="supervisor-realtime-transcription"
+        label="RealTime Transcription"
+      >
+        <RealTimeTranscriptionTab />
+      </Flex.Tab>,
+      {
+        sortOrder: 10,
+        if: ({ task }: { task: Flex.ITask }) =>
+          TaskHelper.isCallTask(task) && !!task.attributes?.call_sid,
+      }
+    );
+
+    // Register operator results tab for supervisor view
+    flex.Supervisor.TaskCanvasTabs.Content.add(
+      <Flex.Tab
+        key="supervisor-operator-results"
+        uniqueName="supervisor-operator-results"
+        label="Operator Results"
+      >
+        <SupervisorOperatorResultsTab />
+      </Flex.Tab>,
+      {
+        sortOrder: 20,
         if: ({ task }: { task: Flex.ITask }) =>
           TaskHelper.isCallTask(task) && !!task.attributes?.call_sid,
       }

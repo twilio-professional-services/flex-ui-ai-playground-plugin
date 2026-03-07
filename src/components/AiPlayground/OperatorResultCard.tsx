@@ -74,6 +74,8 @@ const OperatorResultCard: React.FC<OperatorResultCardProps> = ({ items }) => {
         borderRadius: '8px',
         padding: '16px',
         margin: '8px 0',
+        maxWidth: '100%',
+        boxSizing: 'border-box',
       } as any}
     >
       <Box display="flex" alignItems="center" justifyContent="space-between" marginBottom="space30">
@@ -115,7 +117,7 @@ const OperatorResultCard: React.FC<OperatorResultCardProps> = ({ items }) => {
           )}
         </Box>
       </Box>
-      <Box style={{ maxHeight: '300px', overflowY: 'auto' }}>
+      <Box style={{ maxHeight: '300px', overflow: 'auto' }}>
         <Text
           as="pre"
           fontFamily={outputFormat === 'JSON' ? 'fontFamilyCode' : 'fontFamilyText'}

@@ -8,6 +8,7 @@ A Twilio Flex plugin that adds real-time voice transcription, AI operator result
 - **Realtime AI Operators** -- operator results (Sentiment, Summary, Next-Best-Response, etc.) streamed to a Panel 2 side panel as the conversation happens, with dynamic subtabs that appear automatically per operator
 - **Post Call Operators** -- operator results that fire after the conversation ends (e.g., AgentCoaching) displayed in the same panel
 - **Customer Memory** -- profile lookup via Memora, showing Memory Retrieval, Observations, Conversation Summaries, and Traits for the caller
+- **Supervisor Access** -- supervisors can view real-time transcription and operator results for monitored calls via the Teams View
 - **TaskRouter Integration** -- per-dialed-number routing with optional worker targeting
 - **Participant Type Fix** -- automatic correction of participant types for conversations hydrated via `<Transcription>`
 
@@ -185,6 +186,20 @@ Opens as a side panel when a voice call is selected. Contains three top-level ta
 - **Conversation Summaries** -- summaries of previous conversations
 - **Traits** -- identified customer traits
 
+### Supervisor View
+
+Supervisors can monitor agent calls from the Teams View. When viewing a monitored call, the Supervisor TaskCanvas includes:
+
+**RealTime Transcription Tab** -- Same real-time transcription view as agents see, showing the live conversation flow.
+
+**Operator Results Tab** -- A dropdown selector displaying all operator results (both realtime and post-call operators combined). Supervisors can:
+- Select any operator from the dropdown to view its results
+- See result counts for each operator (e.g., "Sentiment (3 results)")
+- Navigate through operator result history using the same back/forward/latest controls
+- View results with horizontal scrolling when content is wider than the panel
+
+The operator results automatically update as new results arrive during the monitored call. The supervisor tracking is handled by `SupervisorCallTracker`, which subscribes to the same Sync maps as the agent desktop.
+
 ### TaskRouter Workspace Webhook
 
 The `handleTaskRouterWorkspaceWebhook` function handles conversation cleanup after tasks complete.
@@ -224,6 +239,9 @@ flex-ui-ai-playground-plugin/
           useMemora.ts                            Memora API hook
           types.ts, index.ts
         types.ts, utils.ts, index.ts
+      Supervisor/                                 Supervisor view components
+        SupervisorCallTracker.tsx                 Teams View sync tracking for monitored calls
+        SupervisorOperatorResultsTab.tsx          Supervisor TaskCanvas operator results tab with dropdown
     utils/
       sync-to-redux/                              Standalone Sync-to-Redux library
         SyncToReduxService.ts                     Main service (singleton)
