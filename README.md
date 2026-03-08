@@ -43,6 +43,44 @@ For production deployments, consider:
 - **TaskRouter Integration** -- per-dialed-number routing with optional worker targeting
 - **Participant Type Fix** -- automatic correction of participant types for conversations hydrated via `<Transcription>`
 
+## Maestro/Twilio Conversations Orchestrator Hydration
+
+This plugin uses **active hydration** via TwiML `<Transcription>` with a conversation configuration ID to create and populate Maestro conversations.
+
+### Current Implementation: Active Hydration
+
+**How it works:**
+1. Incoming voice calls trigger `handleIncomingCall` function
+2. TwiML `<Start><Transcription>` element includes `conversationConfiguration` parameter
+3. Conversation configuration ID is mapped per phone number in `config.private.json`
+4. Maestro creates conversation and hydrates it with call transcription
+5. Conversation Intelligence operators execute based on configuration
+6. Operator results flow to `handleOperatorResult` webhook for display in Flex UI
+
+**Current Scope:**
+- ✅ **Inbound voice calls** - Fully supported via TwiML `<Transcription>`
+- ⏸️ **Outbound calls from Flex** - Not yet implemented
+- ⏸️ **Flex Conversations (digital channels)** - Not yet implemented
+
+### Alternative: Passive Hydration
+
+For advanced users or testing scenarios, **passive hydration** can be used by:
+1. Configuring ConversationRelay to send call streams into Maestro
+2. Pointing operator result callbacks to the `handleOperatorResult` webhook
+3. Maestro asynchronously ingests events and executes operators
+
+This approach works alongside existing CPaaS voice infrastructure without requiring TwiML changes. The operator result webhook in this plugin should work with passive hydration configurations.
+
+### Future Enhancements
+
+Planned improvements to expand hydration support:
+
+- **Outbound Calls from Flex** - Handle conversations initiated by agents making outbound calls
+- **Flex Conversations Integration** - Support digital channels (SMS, WhatsApp, Chat) via Flex Conversations API
+- **Maestro Communication Events** - Replace `<Transcription>` webhook with `COMMUNICATION_ADDED` events from Maestro for more flexible utterance sources and multi-channel support
+
+**Note:** The `handleConversationEvents` function already handles Maestro conversation webhooks for the participant type workaround. This foundation can be extended to process `COMMUNICATION_ADDED` events for transcript display.
+
 ## Prerequisites
 
 - **Twilio account** with one or more voice-capable phone numbers
