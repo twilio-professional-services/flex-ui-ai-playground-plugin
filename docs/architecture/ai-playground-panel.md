@@ -4,11 +4,16 @@ A Flex UI Panel 2 component that displays AI operator results in real-time durin
 
 ## Overview
 
-When an agent is on a voice call, Panel 2 shows the AI Playground with three top-level tabs:
+Panel 2 always displays the AI Playground component. The content changes based on whether a call task is selected:
 
-- **Realtime Operators** — results from operators triggered during the conversation (`OPERATOR-COMMUNICATION-*`)
-- **Post Call Operators** — results from operators triggered after the conversation ends (`OPERATOR-CONVERSATION_END-*`)
-- **Customer Memory** — profile lookup via Memora, showing recalled memories, observations, conversation summaries, and traits for the caller
+**When no call task is selected:**
+- Shows a centered message: "Operator Results will load when a call task is selected"
+
+**When a call task is active:**
+- Shows three top-level tabs:
+  - **Realtime Operators** — results from operators triggered during the conversation (`OPERATOR-COMMUNICATION-*`)
+  - **Post Call Operators** — results from operators triggered after the conversation ends (`OPERATOR-CONVERSATION_END-*`)
+  - **Customer Memory** — profile lookup via Memora, showing recalled memories, observations, conversation summaries, and traits for the caller
 
 The operator tabs discover keys dynamically from the tracked Sync Map's `syncObjects` and render a subtab per operator. Subtabs appear automatically as operator data arrives. The Customer Memory tab uses the task's `from` attribute to look up the caller's Memora profile via a serverless proxy.
 
@@ -18,41 +23,48 @@ The operator tabs discover keys dynamically from the tracked Sync Map's `syncObj
 Panel 2
   AiPlaygroundPanel (receives tasks + selectedTaskSid from Flex)
     Title: "Flex UI AI Playground"
-    Paste Tabs (top-level)
-      Tab: "Realtime Operators"
-        RealtimeOperatorsTab
-          Paste Tabs (dynamic, one per OPERATOR-COMMUNICATION-* key)
-            Tab: "Sentiment"
-              OperatorResultCard (latest result + navigation + animation)
-            Tab: "Next-Best-Response"
-              OperatorResultCard
-            Tab: "Summary"
-              OperatorResultCard
-            ... (auto-discovered from syncObjects)
-      Tab: "Post Call Operators"
-        PostCallOperatorsTab
-          Paste Tabs (dynamic, one per OPERATOR-CONVERSATION_END-* key)
-            Tab: "AgentCoaching"
-              OperatorResultCard
-            ... (auto-discovered from syncObjects)
-      Tab: "Customer Memory"
-        CustomerMemoryTab (looks up caller profile via Memora)
-          Paste Tabs (static, four sub-tabs)
-            Tab: "Memory Retrieval"
-              MemoriesPanel (semantic search via Recall API)
-            Tab: "Observations"
-              ObservationsPanel (paginated observations list)
-            Tab: "Conversation Summaries"
-              ConversationSummariesPanel (paginated summaries list)
-            Tab: "Traits"
-              TraitsPanel (paginated traits list)
+
+    [Conditional Rendering based on isCallTask]
+
+    IF NO CALL TASK:
+      Centered Message: "Operator Results will load when a call task is selected"
+
+    IF CALL TASK SELECTED:
+      Paste Tabs (top-level)
+        Tab: "Realtime Operators"
+          RealtimeOperatorsTab
+            Paste Tabs (dynamic, one per OPERATOR-COMMUNICATION-* key)
+              Tab: "Sentiment"
+                OperatorResultCard (latest result + navigation + animation)
+              Tab: "Next-Best-Response"
+                OperatorResultCard
+              Tab: "Summary"
+                OperatorResultCard
+              ... (auto-discovered from syncObjects)
+        Tab: "Post Call Operators"
+          PostCallOperatorsTab
+            Paste Tabs (dynamic, one per OPERATOR-CONVERSATION_END-* key)
+              Tab: "AgentCoaching"
+                OperatorResultCard
+              ... (auto-discovered from syncObjects)
+        Tab: "Customer Memory"
+          CustomerMemoryTab (looks up caller profile via Memora)
+            Paste Tabs (static, four sub-tabs)
+              Tab: "Memory Retrieval"
+                MemoriesPanel (semantic search via Recall API)
+              Tab: "Observations"
+                ObservationsPanel (paginated observations list)
+              Tab: "Conversation Summaries"
+                ConversationSummariesPanel (paginated summaries list)
+              Tab: "Traits"
+                TraitsPanel (paginated traits list)
 ```
 
 ## How It Works
 
 ### Panel Registration (`src/AiPlaygroundPlugin.tsx`)
 
-The panel is registered on `AgentDesktopView.Panel2.Content` with an `if` condition that checks for a selected call task with a `call_sid`. Panel 2 passes `tasks` and `selectedTaskSid` as props, which `AiPlaygroundPanel` uses to resolve the current task and pass it down to child components.
+The panel is registered on `AgentDesktopView.Panel2.Content` using `Content.replace()`, which replaces the default CRM container. The panel is **always visible** in Panel 2 and handles conditional rendering internally based on whether a call task is selected. Panel 2 passes `tasks` and `selectedTaskSid` as props, which `AiPlaygroundPanel` uses to resolve the current task and determine what content to display.
 
 ### Data Access Pattern
 

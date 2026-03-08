@@ -311,6 +311,7 @@ All environment variables across both the serverless backend and the Flex plugin
 
 For implementation details, data structures, and component internals, see the docs in [`docs/architecture/`](docs/architecture/):
 
+- [typescript-and-code-organization.md](docs/architecture/typescript-and-code-organization.md) -- TypeScript type system, code organization patterns, and shared utilities
 - [realtime-transcription-ui.md](docs/architecture/realtime-transcription-ui.md) -- RT transcription component architecture and data structures
 - [ai-playground-panel.md](docs/architecture/ai-playground-panel.md) -- Panel 2 component tree, data access, rendering, animations
 - [realtime-transcription-serverless.md](docs/architecture/realtime-transcription-serverless.md) -- Serverless configuration, deployment, testing procedures, troubleshooting
