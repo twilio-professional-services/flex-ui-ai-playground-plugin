@@ -2,6 +2,37 @@
 
 A Twilio Flex plugin that adds real-time voice transcription, AI operator results, and customer memory retrieval to the agent desktop during active calls.
 
+## Intent & Scope
+
+This plugin is designed as an **exploration and iteration tool** for Twilio Conversational Intelligence language operators and customer memory features. It handles the "plumbing" of connecting operator results to the Flex UI, allowing developers to quickly iterate on operator configurations without building custom UI integrations.
+
+**This plugin is NOT intended for production use.**
+
+> **Note:** Realtime Conversational Intelligence is (at the time of writing) in private beta. Contact your Twilio account team or Technical Account Manager for support in enabling this feature for your account.
+
+### Disclaimer
+
+⚠️ **This is not an officially supported Twilio product.** This plugin is provided as-is, without warranty or SLA. It is a community-driven exploration tool for developers working with Conversational Intelligence and Customer Memory features.
+
+We encourage:
+- 🐛 **Issue reports** - Found a bug? Open an issue on GitHub
+- 💡 **Feedback** - Share your experience and suggestions
+- 🤝 **Contributions** - Pull requests are welcome!
+
+### Production Considerations
+
+This implementation prioritizes rapid development and experimentation over production scalability:
+
+- **Twilio Functions Limitations**: The serverless architecture would need refactoring to handle concurrent function invocations at production scale
+- **Sync Subscription Architecture**: The current Sync subscription model creates heavy load when multiple supervisors monitor calls from Teams View, subscribing to multiple Sync objects per monitored call. This pattern would need optimization for production deployments with many concurrent supervisors
+
+For production deployments, consider:
+- Implementing connection pooling and rate limiting for serverless functions
+- Redesigning the Sync subscription model to use a more efficient pub/sub pattern
+- Evaluating alternative real-time data distribution mechanisms
+
+**Need production deployment support?** Reach out to your Twilio account team to discuss Twilio Professional Services assistance with architecture design, scalability optimization, and production-ready implementations.
+
 ## Features
 
 - **RealTime Transcription** -- live speech-to-text displayed in a scrollable chat view on the task panel, with customer messages on the left and agent messages on the right
