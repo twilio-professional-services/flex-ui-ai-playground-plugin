@@ -73,6 +73,9 @@ web_modules/
 .env.*
 !.env.example
 
+# Private configuration with real customer data
+assets/config.private.json
+
 # parcel-bundler cache (https://parceljs.org/)
 .cache
 .parcel-cache

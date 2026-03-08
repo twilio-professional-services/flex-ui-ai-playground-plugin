@@ -1,0 +1,19 @@
+{
+  "defaultConversationConfigId": "conv_configuration_xxxxxxxxxxxxxxxxxxxxx",
+  "phoneNumberMapping": {
+    "+15555551234": {
+      "conversationConfigId": "conv_configuration_xxxxxxxxxxxxxxxxxxxxx",
+      "targetWorkers": ["WKxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"],
+      "description": "Example phone number 1"
+    },
+    "+15555555678": {
+      "conversationConfigId": "conv_configuration_yyyyyyyyyyyyyyyyyyyyyyy",
+      "targetWorkers": ["WKyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyyy"],
+      "description": "Example phone number 2"
+    },
+    "+15555559999": {
+      "conversationConfigId": "conv_configuration_zzzzzzzzzzzzzzzzzzzzzzz",
+      "description": "Example phone number 3 (no worker targeting)"
+    }
+  }
+}

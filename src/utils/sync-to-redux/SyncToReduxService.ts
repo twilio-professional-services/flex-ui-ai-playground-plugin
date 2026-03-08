@@ -14,6 +14,16 @@ import {
   updateSyncMap,
 } from './state/syncToReduxSlice';
 import { TrackedMap, SyncObjectMetadata, TrackedSyncObject, MapTrackingMode } from './types';
+import {
+  SyncMapItemAddedEvent,
+  SyncMapItemUpdatedEvent,
+  SyncMapItemRemovedEvent,
+  SyncDocumentUpdatedEvent,
+  SyncListItemAddedEvent,
+  SyncListItemUpdatedEvent,
+  SyncListItemRemovedEvent,
+  TokenUpdatedEvent,
+} from './syncEventTypes';
 
 class SyncToReduxService {
   private syncClient: SyncClient | null = null;
@@ -26,7 +36,7 @@ class SyncToReduxService {
   // Internal index-keyed storage for list items, enabling incremental
   // updates from Sync events without re-fetching the entire list.
   // Key: "mapName::objectKey", Value: Map<listIndex, itemData>
-  private listIndexMaps: Map<string, Map<number, any>> = new Map();
+  private listIndexMaps: Map<string, Map<number, unknown>> = new Map();
 
   /**
    * Initialize the SyncToRedux service
@@ -50,7 +60,7 @@ class SyncToReduxService {
       this.syncClient = new SyncClient(this.manager.user.token);
 
       // Setup token refresh listener
-      this.manager.events.addListener('tokenUpdated', (payload: any) => {
+      this.manager.events.addListener('tokenUpdated', (payload: TokenUpdatedEvent) => {
         console.log('[SyncToRedux] Token updated, refreshing Sync client');
         if (this.syncClient && payload.token) {
           this.syncClient.updateToken(payload.token);
@@ -63,9 +73,9 @@ class SyncToReduxService {
         this.dispatch(setConnectionState(state as any));
       });
 
-      this.syncClient.on('connectionError', (error: any) => {
+      this.syncClient.on('connectionError', (error) => {
         console.error('[SyncToRedux] Connection error:', error);
-        this.dispatch(setError(error.message || 'Connection error'));
+        this.dispatch(setError((error as any).message || 'Connection error'));
       });
 
       this.initialized = true;
@@ -197,7 +207,7 @@ class SyncToReduxService {
 
   private addMetadataModeListeners(mapName: string, syncMap: SyncMap): void {
     syncMap
-      .on('itemAdded', async (event: any) => {
+      .on('itemAdded', async (event: SyncMapItemAddedEvent<SyncObjectMetadata>) => {
         if (!event.isLocal) {
           const metadata = event.item.data as SyncObjectMetadata;
 
@@ -210,7 +220,7 @@ class SyncToReduxService {
           await this.openSyncObject(mapName, event.item.key, metadata);
         }
       })
-      .on('itemUpdated', async (event: any) => {
+      .on('itemUpdated', async (event: SyncMapItemUpdatedEvent<SyncObjectMetadata>) => {
         if (!event.isLocal) {
           const metadata = event.item.data as SyncObjectMetadata;
 
@@ -228,7 +238,7 @@ class SyncToReduxService {
           }
         }
       })
-      .on('itemRemoved', async (event: any) => {
+      .on('itemRemoved', async (event: SyncMapItemRemovedEvent) => {
         // Close and cleanup the referenced sync object
         const tracked = this.trackedMaps.get(mapName);
         if (tracked && tracked.syncObjects[event.key]) {
@@ -246,7 +256,7 @@ class SyncToReduxService {
 
   private addDirectModeListeners(mapName: string, syncMap: SyncMap): void {
     syncMap
-      .on('itemAdded', (event: any) => {
+      .on('itemAdded', (event: SyncMapItemAddedEvent) => {
         if (!event.isLocal) {
           const tracked = this.trackedMaps.get(mapName);
           if (tracked) {
@@ -256,7 +266,7 @@ class SyncToReduxService {
           this.dispatch(updateDirectMapItem({ mapName, key: event.item.key, value: event.item.data }));
         }
       })
-      .on('itemUpdated', (event: any) => {
+      .on('itemUpdated', (event: SyncMapItemUpdatedEvent) => {
         if (!event.isLocal) {
           const tracked = this.trackedMaps.get(mapName);
           if (tracked) {
@@ -266,7 +276,7 @@ class SyncToReduxService {
           this.dispatch(updateDirectMapItem({ mapName, key: event.item.key, value: event.item.data }));
         }
       })
-      .on('itemRemoved', (event: any) => {
+      .on('itemRemoved', (event: SyncMapItemRemovedEvent) => {
         const tracked = this.trackedMaps.get(mapName);
         if (tracked) {
           delete tracked.mapItems[event.key];
@@ -277,7 +287,7 @@ class SyncToReduxService {
   }
 
   // Derive a sorted data array from the index map for Redux dispatch
-  private sortedListItems(indexMap: Map<number, any>): any[] {
+  private sortedListItems(indexMap: Map<number, unknown>): unknown[] {
     return Array.from(indexMap.entries())
       .sort(([a], [b]) => a - b)
       .map(([, data]) => data);
@@ -320,7 +330,7 @@ class SyncToReduxService {
         this.dispatch(updateSyncDocument({ mapName, key, data: doc.data }));
 
         // Document updated events carry the full new data — no read needed
-        doc.on('updated', (event: any) => {
+        doc.on('updated', (event: SyncDocumentUpdatedEvent) => {
           if (!event.isLocal) {
             const tracked = this.trackedMaps.get(mapName);
             if (tracked && tracked.syncObjects[key]) {
@@ -335,14 +345,14 @@ class SyncToReduxService {
         const list = await this.syncClient.list({ id: metadata.syncObjectName, mode: 'open_or_create' });
 
         // Load all existing items and build the index map for incremental updates
-        const indexMap = new Map<number, any>();
+        const indexMap = new Map<number, unknown>();
         let page = await list.getItems({ pageSize: 100 });
-        for (const item of page.items as any[]) {
+        for (const item of page.items) {
           indexMap.set(item.index, item.data);
         }
         while (page.hasNextPage) {
           page = await page.nextPage();
-          for (const item of page.items as any[]) {
+          for (const item of page.items) {
             indexMap.set(item.index, item.data);
           }
         }
@@ -364,7 +374,7 @@ class SyncToReduxService {
         const lk = this.listKey(mapName, key);
 
         list
-          .on('itemAdded', (event: any) => {
+          .on('itemAdded', (event: SyncListItemAddedEvent) => {
             const idxMap = this.listIndexMaps.get(lk);
             if (!idxMap) return;
             idxMap.set(event.item.index, event.item.data);
@@ -376,7 +386,7 @@ class SyncToReduxService {
             }
             this.dispatch(updateSyncList({ mapName, key, items: updatedItems }));
           })
-          .on('itemUpdated', (event: any) => {
+          .on('itemUpdated', (event: SyncListItemUpdatedEvent) => {
             const idxMap = this.listIndexMaps.get(lk);
             if (!idxMap) return;
             idxMap.set(event.item.index, event.item.data);
@@ -388,7 +398,7 @@ class SyncToReduxService {
             }
             this.dispatch(updateSyncList({ mapName, key, items: updatedItems }));
           })
-          .on('itemRemoved', (event: any) => {
+          .on('itemRemoved', (event: SyncListItemRemovedEvent) => {
             const idxMap = this.listIndexMaps.get(lk);
             if (!idxMap) return;
             idxMap.delete(event.index);
@@ -425,7 +435,7 @@ class SyncToReduxService {
 
         // Map events carry item data — update mapItems directly, no re-read needed
         map
-          .on('itemAdded', (event: any) => {
+          .on('itemAdded', (event: SyncMapItemAddedEvent) => {
             const t = this.trackedMaps.get(mapName);
             if (t?.syncObjects[key]) {
               const mi = t.syncObjects[key].mapItems || {};
@@ -434,7 +444,7 @@ class SyncToReduxService {
               this.dispatch(updateSyncMap({ mapName, key, mapItems: { ...mi } }));
             }
           })
-          .on('itemUpdated', (event: any) => {
+          .on('itemUpdated', (event: SyncMapItemUpdatedEvent) => {
             const t = this.trackedMaps.get(mapName);
             if (t?.syncObjects[key]) {
               const mi = t.syncObjects[key].mapItems || {};
@@ -443,7 +453,7 @@ class SyncToReduxService {
               this.dispatch(updateSyncMap({ mapName, key, mapItems: { ...mi } }));
             }
           })
-          .on('itemRemoved', (event: any) => {
+          .on('itemRemoved', (event: SyncMapItemRemovedEvent) => {
             const t = this.trackedMaps.get(mapName);
             if (t?.syncObjects[key]) {
               const mi = t.syncObjects[key].mapItems || {};

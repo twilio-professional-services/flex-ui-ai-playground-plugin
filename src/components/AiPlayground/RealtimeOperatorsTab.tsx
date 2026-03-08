@@ -7,6 +7,7 @@ import { useTrackedMap } from '../../utils/sync-to-redux/hooks';
 import { getRealtimeOperatorKeys, getOperatorDisplayName } from './utils';
 import { OperatorResult } from './types';
 import OperatorResultCard from './OperatorResultCard';
+import { getMapName } from '../../utils/syncMapHelpers';
 
 interface RealtimeOperatorsTabProps {
   task?: ITask;
@@ -14,7 +15,7 @@ interface RealtimeOperatorsTabProps {
 
 const RealtimeOperatorsTab: React.FC<RealtimeOperatorsTabProps> = ({ task }) => {
   const callSid = task?.attributes?.call_sid;
-  const mapName = callSid ? `ai-playground-${callSid}` : '';
+  const mapName = callSid ? getMapName(callSid) : '';
 
   const trackedMap = useTrackedMap(mapName);
   const syncObjects = trackedMap?.syncObjects || {};

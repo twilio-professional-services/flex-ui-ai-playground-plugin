@@ -1,10 +1,7 @@
 import * as Flex from '@twilio/flex-ui';
 import { TaskHelper } from '@twilio/flex-ui';
 import SyncToReduxService from './utils/sync-to-redux/SyncToReduxService';
-
-function getMapName(callSid: string): string {
-  return `ai-playground-${callSid}`;
-}
+import { getMapName } from './utils/syncMapHelpers';
 
 function trackCallTask(task: Flex.ITask): void {
   if (!TaskHelper.isCallTask(task)) return;

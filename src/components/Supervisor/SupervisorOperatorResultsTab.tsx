@@ -8,6 +8,7 @@ import { useTrackedMap } from '../../utils/sync-to-redux/hooks';
 import { getRealtimeOperatorKeys, getPostCallOperatorKeys, getOperatorDisplayName } from '../AiPlayground/utils';
 import OperatorResultCard from '../AiPlayground/OperatorResultCard';
 import type { OperatorResult } from '../AiPlayground/types';
+import { getMapName } from '../../utils/syncMapHelpers';
 
 interface SupervisorOperatorResultsTabProps {
   task?: Flex.ITask;
@@ -15,7 +16,7 @@ interface SupervisorOperatorResultsTabProps {
 
 const SupervisorOperatorResultsTab: React.FC<SupervisorOperatorResultsTabProps> = ({ task }) => {
   const callSid = task?.attributes?.call_sid;
-  const mapName = callSid ? `ai-playground-${callSid}` : '';
+  const mapName = callSid ? getMapName(callSid) : '';
 
   // Access Redux state for this call
   const trackedMap = useTrackedMap(mapName);

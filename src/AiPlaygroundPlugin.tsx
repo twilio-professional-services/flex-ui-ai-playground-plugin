@@ -99,16 +99,12 @@ export default class AiPlaygroundPlugin extends FlexPlugin {
       }
     );
 
-    // Register Panel 2 for AI Playground
-    flex.AgentDesktopView.Panel2.Content.add(
+    // Replace Panel 2 CRM container with AI Playground
+    flex.AgentDesktopView.Panel2.Content.replace(
       <AiPlaygroundPanel key="ai-playground-panel" />,
       {
         sortOrder: -1,
-        if: ({ tasks, selectedTaskSid }: { tasks: Map<string, Flex.ITask>; selectedTaskSid: string }) => {
-          if (!selectedTaskSid) return false;
-          const task = tasks.get(selectedTaskSid);
-          return !!task && TaskHelper.isCallTask(task) && !!task.attributes?.call_sid;
-        },
+        if: () => true, // Always show
       }
     );
   }

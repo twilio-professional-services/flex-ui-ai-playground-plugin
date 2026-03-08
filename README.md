@@ -30,7 +30,7 @@ A Twilio Flex plugin that adds real-time voice transcription, AI operator result
 
 ```bash
 # 1. Clone the repo
-git clone <repo-url>
+git clone https://github.com/twilio-professional-services/flex-ui-ai-playground-plugin.git
 cd flex-ui-ai-playground-plugin
 
 # 2. Install plugin dependencies
@@ -46,7 +46,8 @@ cp serverless-ai-playground-plugin/.env-template serverless-ai-playground-plugin
 # Edit serverless-ai-playground-plugin/.env with your values (see Serverless Setup below)
 
 # 5. Configure phone number mapping
-# Edit serverless-ai-playground-plugin/assets/config.private.json (see Phone Number Config below)
+cp serverless-ai-playground-plugin/assets/config.private.json.example serverless-ai-playground-plugin/assets/config.private.json
+# Edit serverless-ai-playground-plugin/assets/config.private.json with your phone numbers and config IDs (see Phone Number Config below)
 
 # 6. Deploy serverless functions
 cd serverless-ai-playground-plugin
@@ -87,7 +88,13 @@ Copy `.env-template` to `.env` inside `serverless-ai-playground-plugin/` and fil
 
 ### Phone Number Configuration
 
-Edit `serverless-ai-playground-plugin/assets/config.private.json`:
+Create `serverless-ai-playground-plugin/assets/config.private.json` from the example template:
+
+```bash
+cp serverless-ai-playground-plugin/assets/config.private.json.example serverless-ai-playground-plugin/assets/config.private.json
+```
+
+Then edit `config.private.json` with your configuration:
 
 ```json
 {
@@ -111,6 +118,8 @@ Edit `serverless-ai-playground-plugin/assets/config.private.json`:
   - `conversationConfigId` -- Conversation Intelligence Service ID
   - `targetWorkers` -- (optional) array of Worker SIDs (`WK...`) to route to
   - `description` -- (optional) human-readable label
+
+> **Note:** The `config.private.json` file is gitignored to prevent committing sensitive phone numbers and configuration IDs. Use `config.private.json.example` as a template.
 
 ### TaskRouter Workflow
 

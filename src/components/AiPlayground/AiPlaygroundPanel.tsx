@@ -1,7 +1,9 @@
 import React from 'react';
 import * as Flex from '@twilio/flex-ui';
+import { TaskHelper } from '@twilio/flex-ui';
 import { Box } from '@twilio-paste/core/box';
 import { Heading } from '@twilio-paste/core/heading';
+import { Text } from '@twilio-paste/core/text';
 import { Tabs, Tab, TabList, TabPanel, TabPanels, useTabState } from '@twilio-paste/core/tabs';
 import { useUID } from '@twilio-paste/core/uid-library';
 import RealtimeOperatorsTab from './RealtimeOperatorsTab';
@@ -15,6 +17,7 @@ interface AiPlaygroundPanelProps {
 
 const AiPlaygroundPanel: React.FC<AiPlaygroundPanelProps> = ({ tasks, selectedTaskSid }) => {
   const task = selectedTaskSid ? tasks?.get(selectedTaskSid) : undefined;
+  const isCallTask = task && TaskHelper.isCallTask(task) && !!task.attributes?.call_sid;
   const realtimeOperatorsId = useUID();
   const postCallOperatorsId = useUID();
   const customerMemoryId = useUID();
@@ -27,28 +30,43 @@ const AiPlaygroundPanel: React.FC<AiPlaygroundPanelProps> = ({ tasks, selectedTa
           Flex UI AI Playground
         </Heading>
       </Box>
-      <Tabs selectedId={realtimeOperatorsId} baseId="ai-playground-tabs" state={tabState}>
-        <Box paddingX="space60">
-          <TabList aria-label="AI Playground tabs">
-            <Tab id={realtimeOperatorsId}>Realtime Operators</Tab>
-            <Tab id={postCallOperatorsId}>Post Call Operators</Tab>
-            <Tab id={customerMemoryId}>Customer Memory</Tab>
-          </TabList>
+      {!isCallTask ? (
+        <Box
+          display="flex"
+          justifyContent="center"
+          alignItems="center"
+          flex="1"
+          paddingX="space60"
+          paddingY="space100"
+        >
+          <Text as="p" color="colorTextWeak" textAlign="center">
+            Operator Results will load when a call task is selected
+          </Text>
         </Box>
-        <Box flex="1" minHeight="0" overflowY="auto" paddingX="space60" paddingBottom="space60">
-          <TabPanels>
-            <TabPanel>
-              <RealtimeOperatorsTab task={task} />
-            </TabPanel>
-            <TabPanel>
-              <PostCallOperatorsTab task={task} />
-            </TabPanel>
-            <TabPanel>
-              <CustomerMemoryTab task={task} />
-            </TabPanel>
-          </TabPanels>
-        </Box>
-      </Tabs>
+      ) : (
+        <Tabs selectedId={realtimeOperatorsId} baseId="ai-playground-tabs" state={tabState}>
+          <Box paddingX="space60">
+            <TabList aria-label="AI Playground tabs">
+              <Tab id={realtimeOperatorsId}>Realtime Operators</Tab>
+              <Tab id={postCallOperatorsId}>Post Call Operators</Tab>
+              <Tab id={customerMemoryId}>Customer Memory</Tab>
+            </TabList>
+          </Box>
+          <Box flex="1" minHeight="0" overflowY="auto" paddingX="space60" paddingBottom="space60">
+            <TabPanels>
+              <TabPanel>
+                <RealtimeOperatorsTab task={task} />
+              </TabPanel>
+              <TabPanel>
+                <PostCallOperatorsTab task={task} />
+              </TabPanel>
+              <TabPanel>
+                <CustomerMemoryTab task={task} />
+              </TabPanel>
+            </TabPanels>
+          </Box>
+        </Tabs>
+      )}
     </Box>
   );
 };

@@ -1,16 +1,10 @@
 import { useEffect, useRef } from 'react';
 import { useSelector } from 'react-redux';
-import { TaskHelper } from '@twilio/flex-ui';
+import { ITask, TaskHelper } from '@twilio/flex-ui';
 import SyncToReduxService from '../../utils/sync-to-redux/SyncToReduxService';
-
-interface SupervisorWorkerState {
-  worker: any;
-  tasks: Array<any>;
-}
-
-function getMapName(callSid: string): string {
-  return `ai-playground-${callSid}`;
-}
+import { SupervisorWorkerState } from './types';
+import { AppReduxState } from '../../types/reduxTypes';
+import { getMapName } from '../../utils/syncMapHelpers';
 
 const SupervisorCallTracker: React.FC = () => {
   // Track which call SIDs this component subscribed to (for cleanup)
@@ -18,13 +12,13 @@ const SupervisorCallTracker: React.FC = () => {
   const isMountedRef = useRef<boolean>(false);
 
   // Monitor supervisor workers from Redux
-  const supervisorWorkers = useSelector((state: any) => {
+  const supervisorWorkers = useSelector((state: AppReduxState) => {
     return state.flex?.supervisor?.workers as SupervisorWorkerState[] | undefined;
   });
 
   // Monitor our own worker tasks (if we're also an agent)
-  const workerTasks = useSelector((state: any) => {
-    return state.flex?.worker?.tasks as Map<string, any> | undefined;
+  const workerTasks = useSelector((state: AppReduxState) => {
+    return state.flex?.worker?.tasks as Map<string, ITask> | undefined;
   });
 
   // Log on mount
@@ -40,7 +34,7 @@ const SupervisorCallTracker: React.FC = () => {
     // Build a set of call sids from our own worker tasks
     const ourCallSids = new Set<string>();
     if (workerTasks instanceof Map) {
-      workerTasks.forEach((task: any) => {
+      workerTasks.forEach((task: ITask) => {
         if (TaskHelper.isCallTask(task)) {
           const callSid = task.attributes?.call_sid;
           if (callSid) {
@@ -145,7 +139,7 @@ const SupervisorCallTracker: React.FC = () => {
       const ourCallSidsAtUnmount = new Set<string>();
 
       if (currentWorkerTasks instanceof Map) {
-        currentWorkerTasks.forEach((task: any) => {
+        currentWorkerTasks.forEach((task: ITask) => {
           if (TaskHelper.isCallTask(task)) {
             const callSid = task.attributes?.call_sid;
             if (callSid) {

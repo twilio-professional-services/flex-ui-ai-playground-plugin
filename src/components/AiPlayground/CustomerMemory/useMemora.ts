@@ -106,8 +106,9 @@ export function useRecall(profileId: string | null) {
           summariesLimit: params.summariesLimit ?? 5,
         });
         setData(result);
-      } catch (err: any) {
-        setError(err.message);
+      } catch (err: unknown) {
+        const error = err instanceof Error ? err : new Error(String(err));
+        setError(error.message);
       } finally {
         setLoading(false);
       }
@@ -162,8 +163,9 @@ function usePaginatedMemora<T>(
           loading: false,
           error: null,
         });
-      } catch (err: any) {
-        setState((prev) => ({ ...prev, loading: false, error: err.message }));
+      } catch (err: unknown) {
+        const error = err instanceof Error ? err : new Error(String(err));
+        setState((prev) => ({ ...prev, loading: false, error: error.message }));
       }
     },
     [profileId, action, itemsKey],
@@ -260,8 +262,9 @@ export function useDeleteItems(profileId: string | null) {
             [idParam]: id,
           });
           deleted++;
-        } catch (err: any) {
-          setDeleteError(`Failed to delete ${id}: ${err.message}`);
+        } catch (err: unknown) {
+          const error = err instanceof Error ? err : new Error(String(err));
+          setDeleteError(`Failed to delete ${id}: ${error.message}`);
           break;
         }
         setDeleteProgress({ done: deleted, total: ids.length });

@@ -6,6 +6,7 @@ import { ListItem, PartialTranscriptData, isEventItem } from './types';
 import TranscriptionBubble from './TranscriptionBubble';
 import PartialBubble from './PartialBubble';
 import EventMessage from './EventMessage';
+import { getMapName } from '../../utils/syncMapHelpers';
 
 interface RealTimeTranscriptionTabProps {
   task?: Flex.ITask;
@@ -13,7 +14,7 @@ interface RealTimeTranscriptionTabProps {
 
 const RealTimeTranscriptionTab: React.FC<RealTimeTranscriptionTabProps> = ({ task }) => {
   const callSid = task?.attributes?.call_sid;
-  const mapName = callSid ? `ai-playground-${callSid}` : '';
+  const mapName = callSid ? getMapName(callSid) : '';
 
   const transcriptionsObj = useSyncObject(mapName, 'transcriptions');
   const partialTranscriptObj = useSyncObject(mapName, 'partialTranscript');
