@@ -15,8 +15,10 @@ function basicAuth(accountSid, authToken) {
   );
 }
 
-// This is a temporary workaround to close conversations when tasks are completed, wrapped up, or deleted.
-// <Transcription /> hydrated conversations are not currently being closed in Twilio Prod due to a regression. This workaround can be removed once the underlying issue is resolved.
+// This is a workaround to close conversations when tasks are completed, wrapped up, or deleted.
+// <Transcription /> hydrated conversations were not being automatically closed in Twilio Prod due to a regression.
+// At the time of writing, this issue has been fixed in production, but this code is left here for reference
+// in case the regression resurfaces or for deployments where the fix is not yet available.
 exports.handler = async function (context, event, callback) {
   const response = new Twilio.Response();
   response.setStatusCode(200);
