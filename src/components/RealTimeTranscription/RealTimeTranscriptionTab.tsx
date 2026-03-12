@@ -48,7 +48,7 @@ const RealTimeTranscriptionTab: React.FC<RealTimeTranscriptionTabProps> = ({ tas
   }
 
   return (
-    <Box overflowY="auto" padding="space40" style={{ height: '100%' }}>
+    <Box overflowY="auto" padding="space40" style={{ maxWidth: '420px', width: '100%', height: '100%' }}>
       <Stack orientation="vertical" spacing="space30">
         {activePartials.map((partial) => (
           <PartialBubble key={`partial-${partial.track}`} track={partial.track} text={partial.text} />
